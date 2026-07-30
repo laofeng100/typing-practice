@@ -23,7 +23,7 @@
 bun run dev              # 开发（端口 3000，日志 tee 到 dev.log）
 bun run build            # 生产构建（含 standalone 拷贝）
 bun run start            # 生产运行（standalone，日志 tee 到 server.log）
-bunx tsc --noEmit        # 类型检查（改代码后必跑；src/ 零错误，scripts/ 下 5 个历史 `e is unknown` 豁免）
+node node_modules/typescript/bin/tsc --noEmit  # 类型检查（改代码后必跑；src/ 零错误，scripts/ 下 5 个历史 `e is unknown` 豁免）
 bun run lint             # eslint
 bun run db:push          # prisma schema 推送（schema 变更后部署必跑）
 
@@ -33,6 +33,14 @@ bun scripts/test-seed-batch1.ts && bun scripts/test-batch1.ts   # batch1~4 同�
 
 # 听力 TTS 缓存预热（新增/修改听力文章后必跑，幂等）
 bun run scripts/prewarm-listening-tts.ts
+```
+
+## Git（2026-07-29 初始化）
+
+```bash
+git log --oneline        # 查看提交历史
+git status               # 检查当前改动
+git diff                 # 查看未暂存的改动
 ```
 
 ## FSRS 与学科规则
