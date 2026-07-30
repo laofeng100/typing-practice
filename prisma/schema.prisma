@@ -1,0 +1,358 @@
+// 键英双修打字练习系统 - Prisma Schema
+// 数据库: SQLite (便于部署)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== 用户系统 ====================
+
+model User {
+  id        String   @id @default(cuid())
+  phone     String   @unique // 手机号作为账号
+  name      String   // 姓名（儿子-弟弟 / 女儿-姐姐）
+  nickname  String?  // 昵称
+  avatar    String?  // 头像URL/标识
+  role      String   @default("student") // student
+  stage     String   @default("小学") // 当前学段：小学/初中/高中
+  grade     String   @default("小升初") // 年级
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联
+  sessions       TypingSession[]
+  records        TypingRecord[]
+  fsrsCards      FsrsCard[]
+  fsrsReviews    FsrsReview[]
+  progress       UserProgress[]
+  assessments    Assessment[]
+  settings       UserSetting[]
+  dailyStats     DailyStat[]
+}
+
+// ==================== 学习资源库 ====================
+
+// 英语单词表 (6890词)
+model Word {
+  id         Int      @id
+  en         String   // 英文单词
+  zh         String   // 中文释义
+  pos        String   // 词性
+  stage      String   // 学段：小学/初中/高中
+  difficulty String   // 难度：A1/A2/B1/B2/C1/C2
+  createdAt  DateTime @default(now())
+
+  // 索引
+  @@index([stage, difficulty])
+  @@index([en])
+}
+
+// 语法句式 (215条)
+model GrammarPattern {
+  id         Int      @id
+  stage      String   // 学段
+  grade      String   // 年级
+  term       String   // 学期
+  category   String   // 类别：语法/句式
+  name       String   // 项目名称
+  structure  String   // 结构/公式
+  example    String   // 例句
+  difficulty String   // 难度
+  createdAt  DateTime @default(now())
+
+  @@index([stage, category])
+}
+
+// 语法体系总览 (94条)
+model GrammarSystem {
+  id         Int      @id
+  majorCat   String   // 语法大类
+  itemName   String   // 语法项目
+  content    String   // 具体内容
+  stage      String   // 对应学段
+  grade      String   // 对应年级
+  difficulty String   // 难度
+  createdAt  DateTime @default(now())
+
+  @@index([stage])
+  @@index([majorCat])
+}
+
+// 训练句子 (3学段×150 = 450句)
+model Sentence {
+  id               Int      @id
+  stage            String   // 学段：小学/初中/高中
+  order            Int      // 序号
+  en               String   // 英文句子
+  zh               String   // 中文翻译
+  grammarPoint     String   // 语法点
+  grammarExplain   String   // 语法讲解
+  difficulty       String   // 难度
+  sourcePatternId  Int?     // 来源语法句式ID
+  createdAt        DateTime @default(now())
+
+  @@index([stage, order])
+}
+
+// 阅读短文 (每学段20-30篇)
+model ReadingArticle {
+  id            Int      @id
+  stage         String   // 学段
+  order         Int      // 序号
+  title         String   // 标题
+  category      String   // 类别：传统文化/科技前沿/生态文明/劳动教育/思辨表达/多模态
+  content       String   // 英文正文（多段落，用\n分隔）
+  contentZh     String   // 中文翻译（可选）
+  wordCount     Int      // 词数
+  questions     String   // 选择题JSON数组 [{q, options[], answer, explain}]
+  vocabulary    String   // 核心词汇JSON [{en, zh}]
+  grammarPoints String   // 语法点JSON
+  difficulty    String   // 难度
+  createdAt     DateTime @default(now())
+
+  @@index([stage, order])
+  @@index([category])
+}
+
+// 中文必背课文 (小学到高中)
+model ChineseText {
+  id         Int      @id
+  stage      String   // 学段：小学/初中/高中
+  grade      String   // 年级
+  order      Int      // 序号
+  title      String   // 标题
+  author     String?  // 作者
+  dynasty    String?  // 朝代
+  category   String   // 类别：古诗词/文言文/现代文
+  content    String   // 正文
+  annotation String?  // 注释
+  translation String? // 译文（古文）
+  wordCount  Int      // 字数
+  difficulty String   // 难度
+  isRequired Boolean  @default(true) // 是否必背
+  createdAt  DateTime @default(now())
+
+  @@index([stage, grade])
+  @@index([category])
+}
+
+// 听力文章 (每学段30篇，各种题材)
+model ListeningArticle {
+  id            Int      @id
+  stage         String   // 学段
+  order         Int      // 序号
+  title         String   // 标题
+  category      String   // 类别：日常对话/故事讲述/新闻播报/科普知识/文化介绍/诗歌朗诵
+  content       String   // 英文正文
+  contentZh     String?  // 中文翻译
+  wordCount     Int      // 词数
+  questions     String   // 选择题JSON数组
+  vocabulary    String?  // 核心词汇JSON
+  difficulty    String   // 难度
+  createdAt     DateTime @default(now())
+
+  @@index([stage, order])
+  @@index([category])
+}
+
+// ==================== FSRS 记忆系统 ====================
+
+// FSRS 卡片状态（每个用户对每个单词/句子/课文一条）
+model FsrsCard {
+  id           String   @id @default(cuid())
+  userId       String
+  cardType     String   // 卡片类型：word/sentence/article/chinese
+  cardId       String   // 对应资源ID（字符串化）
+  // FSRS V6 核心参数
+  stability    Float    @default(0) // 记忆稳定性
+  difficulty   Float    @default(0) // 难度
+  retrievability Float  @default(1) // 当前可提取性
+  // 调度
+  due          DateTime @default(now()) // 下次到期时间
+  lastReview   DateTime? // 上次复习时间
+  reps         Int      @default(0) // 复习次数
+  lapses       Int      @default(0) // 遗忘次数
+  state        Int      @default(0) // 0=New 1=Learning 2=Review 3=Relearning
+  // 统计
+  totalTyping  Int      @default(0) // 累计打字次数
+  totalErrors  Int      @default(0) // 累计错误次数
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cardType, cardId])
+  @@index([userId, due])
+  @@index([cardType, cardId])
+}
+
+// FSRS 复习日志
+model FsrsReview {
+  id           String   @id @default(cuid())
+  userId       String
+  cardType     String
+  cardId       String
+  rating       Int      // 评分 1=Again 2=Hard 3=Good 4=Easy
+  state        Int      // 复习时状态
+  stability    Float    // 复习后稳定性
+  difficulty   Float    // 复习后难度
+  responseMs   Int      // 响应时间（毫秒）
+  accuracy     Float    // 本次准确率
+  errorCount   Int      // 错误数
+  reviewedAt   DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, reviewedAt])
+  @@index([cardType, cardId])
+}
+
+// ==================== 练习记录 ====================
+
+// 练习会话
+model TypingSession {
+  id           String   @id @default(cuid())
+  userId       String
+  module       String   // 模块：keyboard/word/sentence/article/chinese/assessment
+  subModule    String?  // 子模块：如 keyboard-level1
+  // 统计
+  durationMs   Int      @default(0) // 时长（毫秒）
+  totalKeys    Int      @default(0) // 总键数
+  correctKeys  Int      @default(0) // 正确键数
+  errorKeys    Int      @default(0) // 错误键数
+  totalChars   Int      @default(0) // 总字符数
+  wpm          Float    @default(0) // 每分钟字数
+  accuracy     Float    @default(0) // 准确率
+  // 状态
+  status       String   @default("completed") // in_progress/completed/abandoned
+  score        Float?   // 得分（关卡用）
+  stars        Int?     // 星级
+  metadata     String?  // 额外数据JSON
+  startedAt    DateTime @default(now())
+  endedAt      DateTime?
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  records      TypingRecord[]
+
+  @@index([userId, module, startedAt])
+}
+
+// 逐条练习记录（每个词/句/段）
+model TypingRecord {
+  id           String   @id @default(cuid())
+  userId       String
+  sessionId    String?
+  module       String   // 模块
+  cardType     String?  // 卡片类型
+  cardId       String?  // 卡片ID
+  // 数据
+  targetText   String   // 目标文本
+  inputText    String?  // 实际输入
+  durationMs   Int      @default(0)
+  totalKeys    Int      @default(0)
+  errorKeys    Int      @default(0)
+  accuracy     Float    @default(0)
+  wpm          Float    @default(0)
+  isCorrect    Boolean  @default(false)
+  rating       Int?     // FSRS评分
+  errorKeysList String? // 错误键位JSON ["a","s"]
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session      TypingSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([sessionId])
+}
+
+// ==================== 进度与解锁 ====================
+
+model UserProgress {
+  id           String   @id @default(cuid())
+  userId       String
+  module       String   // 模块
+  level        Int      @default(0) // 关卡级别
+  status       String   @default("locked") // locked/active/completed
+  bestWpm      Float    @default(0) // 最佳速度
+  bestAccuracy Float    @default(0) // 最佳准确率
+  stars        Int      @default(0) // 星级
+  attempts     Int      @default(0) // 尝试次数
+  completedAt  DateTime?
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, module, level])
+}
+
+// ==================== 评估 ====================
+
+model Assessment {
+  id           String   @id @default(cuid())
+  userId       String
+  type         String   // 评估类型：initial/keyboard/word/reading/comprehensive
+  // 结果
+  wpm          Float    @default(0)
+  accuracy     Float    @default(0)
+  score        Float    @default(0)
+  level        String?  // 评定等级
+  details      String?  // 详细JSON
+  takenAt      DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, takenAt])
+}
+
+// ==================== 每日统计 ====================
+
+model DailyStat {
+  id           String   @id @default(cuid())
+  userId       String
+  date         String   // YYYY-MM-DD
+  // 时长
+  totalMs      Int      @default(0) // 当日总练习时长
+  // 键盘练习
+  keyboardMs   Int      @default(0)
+  // 单词
+  wordNew      Int      @default(0) // 新学词数
+  wordReview   Int      @default(0) // 复习词数
+  wordCorrect  Int      @default(0)
+  // 句子
+  sentenceDone Int      @default(0)
+  // 阅读
+  articleDone  Int      @default(0)
+  // 中文
+  chineseDone  Int      @default(0)
+  // 听力
+  listeningDone Int     @default(0)
+  // 汇总
+  totalKeys    Int      @default(0)
+  correctKeys  Int      @default(0)
+  avgWpm       Float    @default(0)
+  avgAccuracy  Float    @default(0)
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+}
+
+// ==================== 用户设置 ====================
+
+model UserSetting {
+  id           String   @id @default(cuid())
+  userId       String
+  key          String   // 设置键
+  value        String   // 设置值
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+}

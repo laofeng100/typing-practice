@@ -1,0 +1,14 @@
+node_modules
+.next
+db
+dev.log
+server.log
+.git
+.zscripts
+download
+skills
+mini-services
+examples
+*.log
+.DS_Store
+.env.local

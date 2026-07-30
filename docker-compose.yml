@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  typing-practice:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: typing-practice
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - TZ=Asia/Shanghai
+      - DATABASE_URL=file:/app/db/custom.db
+      - SESSION_SECRET=${SESSION_SECRET:-}
+      - TTS_SERVER_URL=${TTS_SERVER_URL:-}
+      - TTS_TOKEN=${TTS_TOKEN:-}
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    volumes:
+      # SQLite数据库持久化
+      - ./db:/app/db
+      # Excel数据源（首次初始化用）
+      - ./upload:/app/upload
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3

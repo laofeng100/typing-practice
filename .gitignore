@@ -1,0 +1,14 @@
+node_modules/
+.next/
+*.db
+*.db-journal
+.env
+.env.local
+dev.log
+server.log
+.qoder/
+.DS_Store
+tsconfig.tsbuildinfo
+next-env.d.ts
+upload/*.xlsx
+node_modules
