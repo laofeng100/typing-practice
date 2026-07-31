@@ -230,7 +230,7 @@ model ListeningArticle {
 model FsrsCard {
   id           String   @id @default(cuid())
   userId       String
-  cardType     String   // 卡片类型：word/sentence/article/chinese
+  cardType     String   // 卡片类型：word/sentence/article
   cardId       String   // 对应资源ID（字符串化）
   // FSRS V6 核心参数
   stability    Float    @default(0) // 记忆稳定性
@@ -282,7 +282,7 @@ model FsrsReview {
 model TypingSession {
   id           String   @id @default(cuid())
   userId       String
-  module       String   // 模块：keyboard/word/sentence/article/chinese/assessment
+  module       String   // 模块：keyboard/word/sentence/article/assessment
   subModule    String?  // 子模块：如 keyboard-level1
   // 统计
   durationMs   Int      @default(0) // 时长（毫秒）
