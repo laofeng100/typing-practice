@@ -138,21 +138,6 @@ model WordRelated {
   @@index([wordId])
 }
 
-// 英语单词表 (6890词，V2 后被 WordDict 替换，等待迁移完成删除)
-model Word {
-  id         Int      @id
-  en         String   // 英文单词
-  zh         String   // 中文释义
-  pos        String   // 词性
-  stage      String   // 学段：小学/初中/高中
-  difficulty String   // 难度：A1/A2/B1/B2/C1/C2
-  createdAt  DateTime @default(now())
-
-  // 索引
-  @@index([stage, difficulty])
-  @@index([en])
-}
-
 // 语法句式 (215条)
 model GrammarPattern {
   id         Int      @id
@@ -217,28 +202,6 @@ model ReadingArticle {
   createdAt     DateTime @default(now())
 
   @@index([stage, order])
-  @@index([category])
-}
-
-// 中文必背课文 (小学到高中)
-model ChineseText {
-  id         Int      @id
-  stage      String   // 学段：小学/初中/高中
-  grade      String   // 年级
-  order      Int      // 序号
-  title      String   // 标题
-  author     String?  // 作者
-  dynasty    String?  // 朝代
-  category   String   // 类别：古诗词/文言文/现代文
-  content    String   // 正文
-  annotation String?  // 注释
-  translation String? // 译文（古文）
-  wordCount  Int      // 字数
-  difficulty String   // 难度
-  isRequired Boolean  @default(true) // 是否必背
-  createdAt  DateTime @default(now())
-
-  @@index([stage, grade])
   @@index([category])
 }
 
