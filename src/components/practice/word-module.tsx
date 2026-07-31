@@ -14,12 +14,18 @@ import { TTSButton, useTTS } from './tts-player'
 import { BookOpen, Brain, Zap, CheckCircle2, XCircle, ChevronRight, RefreshCw, Lock, TrendingUp, Lightbulb, Volume2 } from 'lucide-react'
 
 interface WordItem {
-  id: number
+  id: string // head_word
   en: string
   zh: string
   pos: string
-  stage: string
-  difficulty: string
+  usPhone?: string
+  ukPhone?: string
+  memoryMethod?: string
+  wordRank?: number | null
+  examples?: { en: string; cn: string }[]
+  phrases?: { phrase: string; cn: string }[]
+  synonyms?: { pos?: string; word: string; tranCn?: string | null }[]
+  related?: { pos?: string; word: string; tranCn?: string | null }[]
   cardState?: number
   stability?: number
   difficulty_card?: number
@@ -75,6 +81,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
       }
       setQueue(q)
       setStats(d.stats)
+      setCurrentBookInfo(d.currentBook || null)
       setCurrentIdx(0)
       setInput('')
       startTimeRef.current = null
@@ -91,6 +98,61 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
       toast({ title: '加载失败', description: e.message, variant: 'destructive' })
     } finally {
       setLoading(false)
+    }
+  }
+
+  // 词书选择器状态
+  const [books, setBooks] = useState<any[]>([])
+  const [currentBookId, setCurrentBookId] = useState('')
+  const [booksLoading, setBooksLoading] = useState(false)
+  const [currentBookInfo, setCurrentBookInfo] = useState<any>(null) // 当前教材信息（进度卡/晋级提示展示）
+
+  const STAGE_LABELS: Record<string, string> = { primary: '小学', middle: '初中', high: '高中' }
+
+  // 教材短名：人教版小学英语-三年级上册 → 三年级上册
+  const bookShortTitle = (b: any) => b.title?.split('-')[1] || b.title || b.id
+
+  // 加载词书列表 + 选择页统计（首次进入/切换教材后刷新）
+  const refreshSelectData = useCallback(async () => {
+    const [r1, r2] = await Promise.all([
+      fetch('/api/books').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/word?mode=mixed').then(r => r.ok ? r.json() : null).catch(() => null),
+    ])
+    if (r1) {
+      setBooks(r1.books || [])
+      setCurrentBookId(r1.currentBookId)
+    }
+    if (r2) {
+      setStats(r2.stats)
+      setCurrentBookInfo(r2.currentBook || null)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (mode === 'select') refreshSelectData()
+  }, [mode, refreshSelectData])
+
+  // 切换教材
+  const switchBook = async (b: any) => {
+    if (b.id === currentBookId || booksLoading) return
+    setBooksLoading(true)
+    try {
+      const r = await fetch('/api/books', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookId: b.id }),
+      })
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}))
+        toast({ title: '切换失败', description: d.error, variant: 'destructive' })
+        return
+      }
+      setCurrentBookId(b.id)
+      toast({ title: `已切换到「${bookShortTitle(b)}」` })
+      onProgress?.()
+      refreshSelectData()
+    } finally {
+      setBooksLoading(false)
     }
   }
 
@@ -127,6 +189,8 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value
     const now = Date.now()
+    // 该词是否有扩展内容（例句/短语/近义词），决定完成后停留时长
+    const hasExtras = !!(currentWord.examples?.length || currentWord.phrases?.length || currentWord.synonyms?.length || currentWord.related?.length)
     if (wrongReview && v.length > currentWord.en.length) return // 复习状态禁止超长输入
     if (!startTimeRef.current && v.length > 0) startTimeRef.current = now
     setInput(v)
@@ -140,7 +204,8 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
         advancingRef.current = true
         setFlash('correct')
         setTimeout(() => setFlash(null), 200)
-        goNext(400)
+        // 有扩展内容（例句/短语等）时稍作停留，便于浏览完成面板
+        goNext(hasExtras ? 1600 : 400)
       }
       return
     }
@@ -166,6 +231,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
       wordId: currentWord.id,
       word: currentWord.en,
       zh: currentWord.zh,
+      usPhone: currentWord.usPhone || '',
       cardState: currentWord.cardState || 0,
       input: v,
       durationMs: duration,
@@ -182,7 +248,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
 
     if (isCorrect) {
       advancingRef.current = true
-      goNext(500)
+      goNext(hasExtras ? 1600 : 500)
     } else {
       // 打错：进入复习状态，按回车/点继续或改对后才前进
       setWrongReview(true)
@@ -282,16 +348,63 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
             <BookOpen className="w-6 h-6 text-primary" />
             单词练习
           </h1>
-          <p className="text-sm text-muted-foreground">边打字边背单词，FSRS算法智能调度复习，学完当前学段自动晋级</p>
+          <p className="text-sm text-muted-foreground">边打字边背单词，按教材词序学习，FSRS算法智能调度复习，学完当前教材自动推进</p>
         </div>
 
-        {/* 学段晋级提示 */}
+        {/* 词书选择器 */}
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-primary" />
+                选择教材
+              </h3>
+              {booksLoading && <span className="text-xs text-muted-foreground animate-pulse">加载中...</span>}
+            </div>
+            {(['primary', 'middle', 'high'] as const).map(stage => {
+              const stageBooks = books.filter(b => b.stage === stage)
+              if (stageBooks.length === 0) return null
+              return (
+                <div key={stage} className="mb-3 last:mb-0">
+                  <div className="text-xs text-muted-foreground mb-1.5">{STAGE_LABELS[stage]}</div>
+                  <div className="flex gap-2 overflow-x-auto pb-1 scroll-thin">
+                    {stageBooks.map(b => {
+                      const active = b.id === currentBookId
+                      const done = b.wordCount > 0 && b.learned >= b.wordCount
+                      return (
+                        <button
+                          key={b.id}
+                          onClick={() => switchBook(b)}
+                          disabled={booksLoading}
+                          title={b.title}
+                          className={`shrink-0 text-left px-3 py-2 rounded-lg border transition-all ${
+                            active
+                              ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                              : 'border-border bg-card hover:border-primary/40'
+                          }`}
+                        >
+                          <div className="text-xs font-medium max-w-[110px] truncate">{bookShortTitle(b)}</div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {b.wordCount}词 · 已学{b.learned}{done ? ' ✓' : ''}
+                          </div>
+                          {active && <Badge className="mt-1 text-[10px] bg-primary/10 text-primary">学习中</Badge>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </CardContent>
+        </Card>
+
+        {/* 教材晋级提示 */}
         {stats?.stageUpgraded && (
           <div className="p-4 rounded-lg bg-success/10 border border-success/30 flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center text-xl">🎉</div>
             <div>
-              <div className="font-semibold text-success">恭喜晋级到「{stats.currentStage}」学段！</div>
-              <div className="text-xs text-muted-foreground">你已学完上一个学段的所有单词，系统自动为你解锁下一学段</div>
+              <div className="font-semibold text-success">恭喜！已学完当前教材，自动进入「{bookShortTitle(currentBookInfo)}」！</div>
+              <div className="text-xs text-muted-foreground">新词将按新教材的词序继续学习，复习队列不受影响</div>
             </div>
           </div>
         )}
@@ -314,25 +427,27 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
             <Card>
               <CardContent className="pt-4 text-center">
                 <div className="text-2xl font-bold text-success">{stats.currentStageLearned || 0}<span className="text-sm text-muted-foreground">/{stats.currentStageTotal || 0}</span></div>
-                <div className="text-xs text-muted-foreground">{stats.currentStage || user.stage}学段</div>
+                <div className="text-xs text-muted-foreground truncate px-1" title={currentBookInfo?.title}>
+                  {bookShortTitle(currentBookInfo) || (stats.currentStage || user.stage) + '学段'}
+                </div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-4 text-center">
                 <div className="text-2xl font-bold text-purple-600">{stats.currentStageProgress || 0}%</div>
-                <div className="text-xs text-muted-foreground">学段进度</div>
+                <div className="text-xs text-muted-foreground">教材进度</div>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* 学段进度条 */}
+        {/* 教材进度条 */}
         {stats && stats.currentStageTotal > 0 && (
           <Card>
             <CardContent className="pt-4">
               <div className="flex items-center justify-between text-sm mb-2">
-                <span className="font-medium">{stats.currentStage || user.stage}学段进度</span>
-                <span className="text-muted-foreground">{stats.currentStageLearned}/{stats.currentStageTotal}词</span>
+                <span className="font-medium truncate">{currentBookInfo?.title || `${stats.currentStage || user.stage}学段`}进度</span>
+                <span className="text-muted-foreground shrink-0">{stats.currentStageLearned}/{stats.currentStageTotal}词</span>
               </div>
               <div className="h-2.5 rounded-full bg-secondary overflow-hidden">
                 <div
@@ -341,7 +456,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
                 />
               </div>
               {stats.currentStageProgress >= 100 && (
-                <p className="text-xs text-success mt-2">✨ 本学段已全部学完，继续练习将自动晋级下一学段！</p>
+                <p className="text-xs text-success mt-2">✨ 本教材已全部学完，继续练习将自动进入下一本教材！</p>
               )}
             </CardContent>
           </Card>
@@ -410,16 +525,25 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
           </Card>
         </div>
 
-        {/* 学段说明 */}
+        {/* 词库说明 */}
         <Card className="bg-secondary/30">
           <CardContent className="pt-5">
-            <h3 className="font-semibold text-sm mb-2">当前学段词库</h3>
+            <h3 className="font-semibold text-sm mb-2">词库说明</h3>
             <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className="flex justify-between p-2 rounded bg-card"><span>小学</span><span className="text-muted-foreground">1,062词</span></div>
-              <div className="flex justify-between p-2 rounded bg-card"><span>初中</span><span className="text-muted-foreground">2,317词</span></div>
-              <div className="flex justify-between p-2 rounded bg-card"><span>高中</span><span className="text-muted-foreground">3,511词</span></div>
+              {(['primary', 'middle', 'high'] as const).map(stage => {
+                const count = books.filter(b => b.stage === stage).length
+                if (count === 0) return null
+                return (
+                  <div key={stage} className="flex justify-between p-2 rounded bg-card">
+                    <span>{STAGE_LABELS[stage]}</span>
+                    <span className="text-muted-foreground">{count}本</span>
+                  </div>
+                )
+              })}
             </div>
-            <p className="text-xs text-muted-foreground mt-2">当前学习：{user.stage}（{user.grade}）</p>
+            <p className="text-xs text-muted-foreground mt-2">
+              当前学习：{currentBookInfo?.title || `${user.stage}（${user.grade}）`} · 共 {books.length || 47} 本词书可选，学完自动推进
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -490,9 +614,20 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
                       </motion.div>
                     </AnimatePresence>
                   </div>
+                  {/* 音标行（美/英，有则显示） */}
+                  {(currentWord.usPhone || currentWord.ukPhone) && (
+                    <div className="text-sm font-mono text-muted-foreground mb-1.5">
+                      {currentWord.usPhone && <span>美 {currentWord.usPhone}</span>}
+                      {currentWord.usPhone && currentWord.ukPhone && <span className="mx-1.5">·</span>}
+                      {currentWord.ukPhone && <span>英 {currentWord.ukPhone}</span>}
+                    </div>
+                  )}
+                  {/* 新词记忆法 */}
+                  {isNewWord && currentWord.memoryMethod && (
+                    <div className="text-xs text-amber-600 mb-2">📝 {currentWord.memoryMethod}</div>
+                  )}
                   <div className="flex items-center justify-center gap-2">
                     <Badge variant="secondary">{currentWord.pos}</Badge>
-                    <Badge variant="outline">{currentWord.difficulty}</Badge>
                     {currentWord.cardState ? (
                       <Badge variant="outline" className="text-xs">
                         第{currentWord.reps || 0}次复习 · 稳定度{currentWord.stability?.toFixed(1) || 0}
@@ -601,6 +736,45 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
                   placeholder={isNewWord ? '照打上方单词...' : '输入英文单词...'}
                   disabled={loading}
                 />
+
+                {/* 完成后面板：例句/短语/近义词/相关词（输对时展示） */}
+                {input === currentWord.en && (currentWord.examples?.length || currentWord.phrases?.length || currentWord.synonyms?.length || currentWord.related?.length) ? (
+                  <div className="mt-4 space-y-3">
+                    {currentWord.examples && currentWord.examples.length > 0 && (
+                      <div>
+                        <div className="text-xs font-semibold text-muted-foreground mb-1.5">例句</div>
+                        <div className="space-y-1.5">
+                          {currentWord.examples.slice(0, 2).map((ex, i) => (
+                            <div key={i} className="text-sm">
+                              <span className="text-muted-foreground font-mono">{ex.en}</span>
+                              {ex.cn && <span className="text-xs text-muted-foreground/70 ml-2">{ex.cn}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {currentWord.phrases && currentWord.phrases.length > 0 && (
+                      <div>
+                        <div className="text-xs font-semibold text-muted-foreground mb-1.5">短语</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {currentWord.phrases.slice(0, 3).map((p, i) => (
+                            <Badge key={i} variant="outline" className="text-xs">
+                              {p.phrase}{p.cn ? `：${p.cn}` : ''}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(currentWord.synonyms?.length || currentWord.related?.length) && (
+                      <div className="text-xs">
+                        <span className="font-semibold text-muted-foreground">同</span>
+                        <span className="text-muted-foreground ml-2">
+                          {[...(currentWord.synonyms || []), ...(currentWord.related || [])].slice(0, 6).map(s => s.word).join(' / ')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </motion.div>
@@ -686,6 +860,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
                     <div key={i} className="flex items-center justify-between p-2 rounded bg-destructive/5">
                       <div>
                         <span className="font-mono font-medium">{r.word}</span>
+                        {r.usPhone && <span className="text-xs text-muted-foreground font-mono ml-2">{r.usPhone}</span>}
                         <span className="text-xs text-muted-foreground ml-2">{r.zh}</span>
                       </div>
                       <span className="text-xs text-destructive">准确率 {r.accuracy}%</span>

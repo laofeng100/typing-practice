@@ -10,7 +10,7 @@ import { motion } from 'framer-motion'
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { KEYBOARD_LEVELS } from '@/lib/typing'
 import {
-  Keyboard, BookOpen, FileText, GraduationCap, Headphones, Languages,
+  Keyboard, BookOpen, FileText, GraduationCap, Headphones,
   Clock, Zap, Target, TrendingUp, Trophy, Flame, Lock, Check, Star
 } from 'lucide-react'
 
@@ -92,7 +92,6 @@ export default function Dashboard({ data, onNavigate }: { data: any; onNavigate:
     { id: 'sentence', label: '句子', icon: FileText },
     { id: 'reading', label: '阅读', icon: GraduationCap },
     { id: 'listening', label: '听力', icon: Headphones },
-    { id: 'chinese', label: '中文背诵', icon: Languages },
   ]
   const nodeCompleted = pathNodes.map((_, i) => i === 0 && !!keyboardUnlocked)
   const firstIncomplete = nodeCompleted.findIndex(c => !c)

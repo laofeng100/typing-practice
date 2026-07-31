@@ -618,53 +618,6 @@ export default function SettingsPanel({ user, onUpdated }: { user: any; onUpdate
               </div>
             </div>
           </div>
-
-          {/* 中文语音配置 */}
-          <div className="space-y-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
-            <Label className="text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-              <span className="text-base">🇨🇳</span> 中文语音配置（古诗文背诵）
-            </Label>
-            <div>
-              <Label className="mb-1 block text-xs">音色 (voice_id)</Label>
-              <Input value={s.cnVoiceId} onChange={(e) => update('cnVoiceId', e.target.value)} className="text-sm" />
-              <p className="text-xs text-muted-foreground mt-0.5">如 presenter_male / presenter_female / audiobook_female_1 / female-shaonv / child 等</p>
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <Label className="text-xs">语速（古诗文建议0.8-1.0）</Label>
-                <span className="text-xs font-medium text-amber-600">{s.cnSpeed.toFixed(1)}x</span>
-              </div>
-              <Slider value={[s.cnSpeed]} onValueChange={(v) => update('cnSpeed', v[0])} min={0.5} max={2.0} step={0.1} />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <Label className="text-xs">音量</Label>
-                <span className="text-xs font-medium text-amber-600">{s.cnVol.toFixed(1)}</span>
-              </div>
-              <Slider value={[s.cnVol]} onValueChange={(v) => update('cnVol', v[0])} min={0.5} max={3.0} step={0.1} />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <Label className="text-xs">音调</Label>
-                <span className="text-xs font-medium text-amber-600">{s.cnPitch > 0 ? '+' : ''}{s.cnPitch}</span>
-              </div>
-              <Slider value={[s.cnPitch]} onValueChange={(v) => update('cnPitch', v[0])} min={-12} max={12} step={1} />
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <Label className="mb-1 block text-xs">逗号停顿</Label>
-                <Input type="number" value={s.cnPauseDouHao} onChange={(e) => update('cnPauseDouHao', Number(e.target.value))} min={0} max={5000} className="text-xs" />
-              </div>
-              <div>
-                <Label className="mb-1 block text-xs">句号停顿</Label>
-                <Input type="number" value={s.cnPauseJuHao} onChange={(e) => update('cnPauseJuHao', Number(e.target.value))} min={0} max={5000} className="text-xs" />
-              </div>
-              <div>
-                <Label className="mb-1 block text-xs">顿号停顿</Label>
-                <Input type="number" value={s.cnPauseDunHao} onChange={(e) => update('cnPauseDunHao', Number(e.target.value))} min={0} max={5000} className="text-xs" />
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
 
