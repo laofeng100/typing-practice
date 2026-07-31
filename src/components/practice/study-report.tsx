@@ -23,7 +23,6 @@ const MODULE_NAMES: Record<string, string> = {
   sentence: '句子练习',
   article: '阅读理解',
   listening: '听力练习',
-  chinese: '中文背诵',
 }
 
 export default function StudyReport() {

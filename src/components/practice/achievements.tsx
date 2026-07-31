@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Trophy, Flame, Loader2, Star, Clock, Keyboard, BookOpen, FileText, GraduationCap, Languages } from 'lucide-react'
+import { Trophy, Flame, Loader2, Star, Clock, Keyboard, BookOpen, FileText, GraduationCap } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
@@ -24,7 +24,6 @@ const CATEGORIES = [
   { id: '单词', icon: BookOpen, label: '词汇积累' },
   { id: '句子', icon: FileText, label: '语法练习' },
   { id: '阅读', icon: GraduationCap, label: '阅读理解' },
-  { id: '中文', icon: Languages, label: '中文背诵' },
   { id: '时长', icon: Clock, label: '练习时长' },
 ]
 

@@ -339,7 +339,7 @@ export default function KeyHeatmap({ onClose }: { onClose?: () => void }) {
                      m.module === 'word' ? '单词练习' :
                      m.module === 'sentence' ? '句子练习' :
                      m.module === 'article' ? '阅读理解' :
-                     m.module === 'chinese' ? '中文背诵' : m.module}
+                     m.module === 'listening' ? '听力练习' : m.module}
                   </div>
                   <div className="text-xs text-muted-foreground">{m._count}次练习</div>
                   {m._avg.wpm && <div className="text-xs text-primary mt-0.5">均速 {Math.round(m._avg.wpm)} WPM</div>}

@@ -44,14 +44,6 @@ export const DEFAULT_SETTINGS = {
   enPauseDouHao: 200,                        // 逗号停顿ms
   enPauseJuHao: 350,                         // 句号停顿ms
   enPauseDunHao: 250,                        // 顿号停顿ms
-  // 中文语音配置
-  cnVoiceId: 'presenter_male',               // 中文字色
-  cnSpeed: 0.9,                              // 中文语速(古诗文稍慢)
-  cnVol: 1.0,
-  cnPitch: 0,
-  cnPauseDouHao: 300,                        // 古诗文停顿更长
-  cnPauseJuHao: 500,
-  cnPauseDunHao: 350,
 }
 
 export type Settings = typeof DEFAULT_SETTINGS
@@ -91,13 +83,6 @@ export async function getRawSettings(userId: string): Promise<Settings> {
     enPauseDouHao: map.enPauseDouHao ? Number(map.enPauseDouHao) : DEFAULT_SETTINGS.enPauseDouHao,
     enPauseJuHao: map.enPauseJuHao ? Number(map.enPauseJuHao) : DEFAULT_SETTINGS.enPauseJuHao,
     enPauseDunHao: map.enPauseDunHao ? Number(map.enPauseDunHao) : DEFAULT_SETTINGS.enPauseDunHao,
-    cnVoiceId: map.cnVoiceId || DEFAULT_SETTINGS.cnVoiceId,
-    cnSpeed: map.cnSpeed ? Number(map.cnSpeed) : DEFAULT_SETTINGS.cnSpeed,
-    cnVol: map.cnVol ? Number(map.cnVol) : DEFAULT_SETTINGS.cnVol,
-    cnPitch: map.cnPitch ? Number(map.cnPitch) : DEFAULT_SETTINGS.cnPitch,
-    cnPauseDouHao: map.cnPauseDouHao ? Number(map.cnPauseDouHao) : DEFAULT_SETTINGS.cnPauseDouHao,
-    cnPauseJuHao: map.cnPauseJuHao ? Number(map.cnPauseJuHao) : DEFAULT_SETTINGS.cnPauseJuHao,
-    cnPauseDunHao: map.cnPauseDunHao ? Number(map.cnPauseDunHao) : DEFAULT_SETTINGS.cnPauseDunHao,
   }
 }
 

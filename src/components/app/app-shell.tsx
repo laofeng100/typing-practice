@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { useToast } from '@/hooks/use-toast'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Keyboard, BookOpen, GraduationCap, FileText, Languages,
+  Keyboard, BookOpen, GraduationCap, FileText,
   LayoutDashboard, Settings, LogOut, Menu, Trophy, Zap,
   BarChart3, BookX, ClipboardList, Crosshair, Headphones
 } from 'lucide-react'
@@ -18,7 +18,6 @@ import KeyboardModule from '@/components/practice/keyboard-module'
 import WordModule from '@/components/practice/word-module'
 import SentenceModule from '@/components/practice/sentence-module'
 import ReadingModule from '@/components/practice/reading-module'
-import ChineseModule from '@/components/practice/chinese-module'
 import ListeningModule from '@/components/practice/listening-module'
 import KeyHeatmap from '@/components/practice/key-heatmap'
 import MistakeBook from '@/components/practice/mistake-book'
@@ -45,13 +44,12 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'sentence', label: '句子练习', icon: FileText, module: 'sentence', group: '英语练习' },
   { id: 'reading', label: '阅读理解', icon: GraduationCap, module: 'article', group: '英语练习' },
   { id: 'listening', label: '听力练习', icon: Headphones, module: 'listening', group: '英语练习' },
-  { id: 'chinese', label: '古诗词背诵', icon: Languages, group: '中文练习' }, // 背诵自评不依赖打字能力，不受 WPM 门控
   { id: 'heatmap', label: '键位热力图', icon: BarChart3, group: '学习统计' },
   { id: 'mistakes', label: '错题本', icon: BookX, group: '学习统计' },
   { id: 'settings', label: '设置中心', icon: Settings, group: '系统' },
 ]
 
-const MODULE_GROUPS = ['主要', '打字基础', '英语练习', '中文练习', '学习统计', '系统']
+const MODULE_GROUPS = ['主要', '打字基础', '英语练习', '学习统计', '系统']
 
 const MOBILE_TABS = [
   { id: 'dashboard', label: '概览', icon: LayoutDashboard },
@@ -171,8 +169,6 @@ export default function AppShell({ user, onLogout }: { user: any; onLogout: () =
         return <ReadingModule user={user} settings={dashData?.settings} onProgress={loadDashboard} advancedUnlocked={dashData?.advancedUnlocked} />
       case 'listening':
         return <ListeningModule user={user} settings={dashData?.settings} onProgress={loadDashboard} advancedUnlocked={dashData?.advancedUnlocked} />
-      case 'chinese':
-        return <ChineseModule user={user} settings={dashData?.settings} onProgress={loadDashboard} />
       case 'achievements':
         return (
           <div className="p-4 sm:p-6 max-w-5xl mx-auto">
@@ -215,10 +211,9 @@ export default function AppShell({ user, onLogout }: { user: any; onLogout: () =
                 <BookX className="w-6 h-6 text-primary" />
                 错题本
               </h1>
-              <p className="text-sm text-muted-foreground">自动收集高错误率和多次遗忘的单词/句子/古诗词，重点复习</p>
+              <p className="text-sm text-muted-foreground">自动收集高错误率和多次遗忘的单词/句子，重点复习</p>
             </div>
             <MistakeBook onPractice={(t, id) => {
-              if (t === 'chinese') { switchView('chinese'); return } // 古诗词回到背诵模块复习
               setFocusedInit(t === 'word' ? 'words' : 'sentences')
               setFocusedId(id)
               switchView('focused')

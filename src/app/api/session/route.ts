@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
     const hasExplicitRating = typeof r.rating === 'number' && Number.isInteger(r.rating) && r.rating >= 1 && r.rating <= 4
     let rating = hasExplicitRating ? r.rating : rateTyping(rAcc / 100, rWpm, r.durationMs, targetWpm)
 
-    // 教研降权规则（仅针对打字自动评级；显式自评如古诗词背诵是真实提取，不降权）：
+    // 教研降权规则（仅针对打字自动评级；显式自评是真实提取，不降权）：
     // 1) 新卡首次记录（cardState=0，多为照打/编码环节）封顶 Hard，避免首间隔被虚假拉长
     if (!hasExplicitRating && r.cardState === 0 && rating > 2) rating = 2
     // 2) 使用了提示（支架）的提取封顶 Hard，避免 R 被高估
@@ -135,8 +135,8 @@ export async function POST(req: NextRequest) {
     allCorrectKeys += r.correctKeys || 0
     allTotalKeys += r.totalKeys || 0
 
-    // 更新 FSRS 卡片（仅限 word/sentence/chinese 三类学科卡；article/listening 不建卡）
-    // 守卫：零击键记录（背诵自评等非打字场景）必须显式提供合法 rating，
+    // 更新 FSRS 卡片（仅限 word/sentence 两类学科卡；article/listening 不建卡）
+    // 守卫：零击键记录必须显式提供合法 rating，
     // 否则自动评级会误判为 Again 并惩罚卡片
     if (r.cardType && r.cardId && FSRS_CARD_TYPES.has(r.cardType)) {
       const hasTyping = (r.totalKeys || 0) > 0
@@ -271,7 +271,6 @@ async function updateDailyStat(userId: string, date: string, module: string, dur
     }
     if (module === 'sentence') updates.sentenceDone = { increment: recordCount }
     if (module === 'article') updates.articleDone = { increment: recordCount }
-    if (module === 'chinese') updates.chineseDone = { increment: recordCount }
     if (module === 'listening') updates.listeningDone = { increment: recordCount }
 
     const updated = await tx.dailyStat.update({ where: { userId_date: { userId, date } }, data: updates })

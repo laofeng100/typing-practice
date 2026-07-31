@@ -42,13 +42,6 @@ const DEFAULTS = {
   enPauseDouHao: 200,
   enPauseJuHao: 350,
   enPauseDunHao: 250,
-  cnVoiceId: 'presenter_male',
-  cnSpeed: 0.9,
-  cnVol: 1.0,
-  cnPitch: 0,
-  cnPauseDouHao: 300,
-  cnPauseJuHao: 500,
-  cnPauseDunHao: 350,
 }
 
 // 家长管控门：设置 parentPin 后，时长/解锁/突击区域需输入密码才能编辑
@@ -685,7 +678,7 @@ export default function SettingsPanel({ user, onUpdated }: { user: any; onUpdate
 
             <div className="text-xs text-success flex items-center gap-1 mb-3 pl-6">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>保留：6,890英语单词 + 450训练句子 + 75阅读短文 + 35中文课文 + 语法数据</span>
+              <span>保留：7,572英语单词 + 450训练句子 + 75阅读短文 + 语法数据</span>
             </div>
 
             {hasParentPin && !parentUnlocked ? (

@@ -19,12 +19,11 @@ import { db } from '@/lib/db'
  *
  * 保留内容：
  * - 家长管控设置（parentPin及限额/门槛等，避免重置后管控失效）
- * - Word（英语单词）
+ * - WordDict（词典词条）
  * - GrammarPattern（语法句式）
  * - GrammarSystem（语法体系）
  * - Sentence（训练句子）
  * - ReadingArticle（阅读短文）
- * - ChineseText（中文必背课文）
  * - User（账号本身）
  */
 

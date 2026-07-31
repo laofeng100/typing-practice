@@ -17,7 +17,7 @@ const ttsBuckets = new Map<string, { count: number; resetAt: number }>()
  * {
  *   text: string,           // 必填，要合成的文本
  *   lang: 'en' | 'cn',     // 语言，决定使用英语还是中文音色配置
- *   scene?: string,         // word/sentence/chinese/article/general
+ *   scene?: string,         // word/sentence/article/general
  *   voiceId?: string,       // 覆盖默认音色
  *   speed?: number,         // 覆盖默认语速
  * }
@@ -51,15 +51,15 @@ export async function POST(req: NextRequest) {
 
     const settings = await getRawSettings(user.id)
 
-    // 根据语言选择配置
+    // 根据语言选择配置（中文 TTS 已随古诗词模块下线，cn* 设置键已删除，lang='cn' 时复用英语参数）
     const isChinese = lang === 'cn'
-    const finalVoiceId = voiceId || (isChinese ? settings.cnVoiceId : settings.enVoiceId)
-    const finalSpeed = speed ?? (isChinese ? settings.cnSpeed : settings.enSpeed)
-    const finalVol = isChinese ? settings.cnVol : settings.enVol
-    const finalPitch = isChinese ? settings.cnPitch : settings.enPitch
-    const pauseDouHao = isChinese ? settings.cnPauseDouHao : settings.enPauseDouHao
-    const pauseJuHao = isChinese ? settings.cnPauseJuHao : settings.enPauseJuHao
-    const pauseDunHao = isChinese ? settings.cnPauseDunHao : settings.enPauseDunHao
+    const finalVoiceId = voiceId || settings.enVoiceId
+    const finalSpeed = speed ?? settings.enSpeed
+    const finalVol = settings.enVol
+    const finalPitch = settings.enPitch
+    const pauseDouHao = settings.enPauseDouHao
+    const pauseJuHao = settings.enPauseJuHao
+    const pauseDunHao = settings.enPauseDunHao
 
     // 默认scene
     const finalScene = scene || 'word'

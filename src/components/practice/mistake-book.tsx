@@ -13,13 +13,8 @@ interface MistakeItem {
   id: number
   en?: string
   zh?: string
-  title?: string
-  author?: string
-  dynasty?: string
   pos?: string
   grammarPoint?: string
-  category?: string
-  wordCount?: number
   stage: string
   difficulty: string
   cardState: number
@@ -106,15 +101,12 @@ export default function MistakeBook({ onPractice }: { onPractice?: (type: string
 
       {/* 分类标签 */}
       <Tabs defaultValue="word">
-        <TabsList className="grid grid-cols-3 w-full">
+        <TabsList className="grid grid-cols-2 w-full">
           <TabsTrigger value="word">
             单词 ({grouped.word.length})
           </TabsTrigger>
           <TabsTrigger value="sentence">
             句子 ({grouped.sentence.length})
-          </TabsTrigger>
-          <TabsTrigger value="chinese">
-            古诗词 ({grouped.chinese.length})
           </TabsTrigger>
         </TabsList>
 
@@ -123,9 +115,6 @@ export default function MistakeBook({ onPractice }: { onPractice?: (type: string
         </TabsContent>
         <TabsContent value="sentence" className="mt-4">
           <MistakeList items={grouped.sentence} type="sentence" onPractice={onPractice} />
-        </TabsContent>
-        <TabsContent value="chinese" className="mt-4">
-          <MistakeList items={grouped.chinese} type="chinese" onPractice={onPractice} />
         </TabsContent>
       </Tabs>
     </div>
@@ -165,17 +154,14 @@ function MistakeList({ items, type, onPractice }: { items: MistakeItem[]; type: 
                   <span className="font-medium">
                     {type === 'word' && item.en}
                     {type === 'sentence' && item.en?.slice(0, 50) + (item.en && item.en.length > 50 ? '...' : '')}
-                    {type === 'chinese' && item.title}
                   </span>
                   <Badge variant="outline" className="text-xs">{item.stage}</Badge>
-                  {item.dynasty && <span className="text-xs text-muted-foreground">{item.dynasty}·{item.author}</span>}
                 </div>
 
                 {/* 副信息 */}
                 <div className="text-sm text-muted-foreground mb-2">
                   {type === 'word' && `${item.zh} · ${item.pos}`}
                   {type === 'sentence' && item.zh}
-                  {type === 'chinese' && `${item.category} · ${item.wordCount}字`}
                   {type === 'sentence' && item.grammarPoint && (
                     <span className="ml-2 px-1.5 py-0.5 rounded bg-secondary text-xs">{item.grammarPoint}</span>
                   )}

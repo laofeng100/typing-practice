@@ -32,13 +32,6 @@ const SETTINGS_SCHEMA: Record<string, z.ZodTypeAny> = {
   enPauseDouHao: z.number().min(0).max(5000),
   enPauseJuHao: z.number().min(0).max(5000),
   enPauseDunHao: z.number().min(0).max(5000),
-  cnVoiceId: z.string().min(1).max(100),
-  cnSpeed: z.number().min(0.5).max(2),
-  cnVol: z.number().min(0).max(10),
-  cnPitch: z.number().min(-12).max(12),
-  cnPauseDouHao: z.number().min(0).max(5000),
-  cnPauseJuHao: z.number().min(0).max(5000),
-  cnPauseDunHao: z.number().min(0).max(5000),
 }
 
 // GET: 返回原始设置（用户在设置中心看到自己设的值）+ 运行时生效设置（显示考前突击调整后值）
