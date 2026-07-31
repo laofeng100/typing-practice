@@ -163,7 +163,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
       const isNew = !currentWord.cardState || currentWord.cardState === 0
       if (isNew && (practiceMode === 'new' || practiceMode === 'mixed')) {
         setAutoPlayDone(true)
-        tts.speak(currentWord.en, 'en', { scene: 'word' })
+        tts.speak(currentWord.en, 'en', { scene: 'word', source: 'auto' })
       }
     }
   }, [currentWord, mode, autoPlayDone, practiceMode, tts.speak])
@@ -179,7 +179,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
         setHintCount(prev => Math.min(prev + 1, currentWord.en.length))
       } else if (e.key === ' ') {
         e.preventDefault()
-        tts.speak(currentWord.en, 'en', { scene: 'word' })
+        tts.speak(currentWord.en, 'en', { scene: 'word', source: 'auto' })
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -609,7 +609,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
                       >
                         {showZh ? currentWord.zh : <span className="text-muted-foreground text-xl">点击显示释义</span>}
                         <span onClick={e => e.stopPropagation()}>
-                          <TTSButton text={currentWord.en} lang="en" scene="word" size="default" variant="ghost" />
+                          <TTSButton text={currentWord.en} lang="en" scene="word" source="auto" size="default" variant="ghost" />
                         </span>
                       </motion.div>
                     </AnimatePresence>
@@ -700,7 +700,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
                           显示全词
                         </button>
                         <button
-                          onClick={() => tts.speak(currentWord.en, 'en', { scene: 'word' })}
+                          onClick={() => tts.speak(currentWord.en, 'en', { scene: 'word', source: 'auto' })}
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                           title="按空格键播放语音"
                         >

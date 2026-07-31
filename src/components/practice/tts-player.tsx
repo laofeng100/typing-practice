@@ -26,40 +26,28 @@ export function useTTS() {
     }
   }, [])
 
-  const speak = useCallback(async (text: string, lang: 'en' | 'cn' = 'en', options?: {
+  const bindAndPlay = useCallback((url: string) => {
+    const audio = new Audio(url)
+    audioRef.current = audio
+
+    audio.onplay = () => setPlaying(true)
+    audio.onpause = () => setPlaying(false)
+    audio.onended = () => setPlaying(false)
+    audio.onerror = () => {
+      setPlaying(false)
+      setError('音频播放失败，可能是网络问题或TTS服务器不可达')
+    }
+
+    return audio.play()
+  }, [])
+
+  // 走后端 synthesize 链路（原行为；也作为有道直连失败时的回退）
+  const playViaTts = useCallback(async (text: string, lang: 'en' | 'cn', options: {
     scene?: string
     voiceId?: string
     speed?: number
-  }) => {
-    if (!text || text.length === 0) return
-
-    // 停止当前播放
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current = null
-    }
-
+  } | undefined, cacheKey: string, mySeq: number) => {
     setLoading(true)
-    setError(null)
-
-    const cacheKey = `${text}|${lang}|${options?.voiceId ?? ''}|${options?.speed ?? ''}`
-    const mySeq = ++seqRef.current
-
-    const bindAndPlay = (url: string) => {
-      const audio = new Audio(url)
-      audioRef.current = audio
-
-      audio.onplay = () => setPlaying(true)
-      audio.onpause = () => setPlaying(false)
-      audio.onended = () => setPlaying(false)
-      audio.onerror = () => {
-        setPlaying(false)
-        setError('音频播放失败，可能是网络问题或TTS服务器不可达')
-      }
-
-      return audio.play()
-    }
-
     try {
       // 缓存命中直接播
       if (cacheRef.current?.key === cacheKey) {
@@ -107,7 +95,104 @@ export function useTTS() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [bindAndPlay])
+
+  // 有道 dictvoice 直连播放（仅英文单词）：onerror / play() 拒绝 / 8s 未加载 → 自动回退 TTS
+  const playViaYoudao = useCallback(async (text: string, lang: 'en' | 'cn', options: {
+    scene?: string
+    voiceId?: string
+    speed?: number
+    source?: 'auto' | 'tts'
+  } | undefined, cacheKey: string, mySeq: number) => {
+    setLoading(true)
+    try {
+      await new Promise<void>((resolve) => {
+        const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(text)}&type=2`
+        const audio = new Audio(url)
+        audioRef.current = audio
+
+        let settled = false
+        let timer: ReturnType<typeof setTimeout> | undefined
+
+        const fallback = () => {
+          if (settled) return
+          settled = true
+          if (timer) clearTimeout(timer)
+          try {
+            audio.pause()
+            audio.src = ''
+          } catch { /* 清理失败忽略 */ }
+          // 期间被新请求取代则丢弃，不再回退
+          if (mySeq !== seqRef.current) return
+          playViaTts(text, lang, options, cacheKey, mySeq).finally(() => resolve())
+        }
+
+        audio.onplay = () => setPlaying(true)
+        audio.onpause = () => {
+          setPlaying(false)
+          // 用户主动停止/播放中断：结束本次调用（fallback 中的 pause 因 settled 跳过）
+          if (!settled) {
+            settled = true
+            if (timer) clearTimeout(timer)
+            resolve()
+          }
+        }
+        audio.onended = () => {
+          setPlaying(false)
+          // 正常播放结束：结束本次调用
+          if (!settled) {
+            settled = true
+            if (timer) clearTimeout(timer)
+            resolve()
+          }
+        }
+        audio.onerror = () => {
+          setPlaying(false)
+          fallback()
+        }
+        audio.onloadeddata = () => {
+          if (timer) clearTimeout(timer) // 已加载到数据，取消超时兜底
+        }
+
+        // 8s 内未加载到数据（请求挂起/被拦截）→ 回退 TTS
+        timer = setTimeout(() => {
+          if (audio.readyState < 2) fallback() // HAVE_CURRENT_DATA
+        }, 8000)
+
+        audio.play().catch(() => fallback()) // play() reject（加载失败等）也回退
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [playViaTts])
+
+  const speak = useCallback(async (text: string, lang: 'en' | 'cn' = 'en', options?: {
+    scene?: string
+    voiceId?: string
+    speed?: number
+    source?: 'auto' | 'tts'
+  }) => {
+    if (!text || text.length === 0) return
+
+    // 停止当前播放
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+
+    setLoading(true)
+    setError(null)
+
+    const cacheKey = `${text}|${lang}|${options?.voiceId ?? ''}|${options?.speed ?? ''}`
+    const mySeq = ++seqRef.current
+
+    // 有道直连（默认老行为 source='tts' 保证句子/阅读/听力零影响）
+    if (options?.source === 'auto' && lang === 'en') {
+      await playViaYoudao(text, lang, options, cacheKey, mySeq)
+      return
+    }
+    await playViaTts(text, lang, options, cacheKey, mySeq)
+  }, [playViaTts, playViaYoudao])
 
   const stop = useCallback(() => {
     if (audioRef.current) {
@@ -130,6 +215,7 @@ export function TTSButton({
   scene,
   voiceId,
   speed,
+  source,
   size = 'sm',
   variant = 'outline',
   className = '',
@@ -140,6 +226,7 @@ export function TTSButton({
   scene?: string
   voiceId?: string
   speed?: number
+  source?: 'auto' | 'tts'
   size?: 'sm' | 'default' | 'icon'
   variant?: 'outline' | 'ghost' | 'default'
   className?: string
@@ -151,7 +238,7 @@ export function TTSButton({
     if (playing) {
       stop()
     } else {
-      speak(text, lang, { scene, voiceId, speed })
+      speak(text, lang, { scene, voiceId, speed, source })
     }
   }
 
