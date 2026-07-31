@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     const pauseDunHao = isChinese ? settings.cnPauseDunHao : settings.enPauseDunHao
 
     // 默认scene
-    const finalScene = scene || (isChinese ? 'chinese' : 'word')
+    const finalScene = scene || 'word'
 
     // 调用TTS服务器（文章/对话分段给90秒：英文长文 cache-miss 实测可达35s+；单词等短文本仍30秒）
     const timeoutMs = finalScene === 'article' ? 90000 : 30000

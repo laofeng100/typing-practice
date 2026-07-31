@@ -3,7 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { calculateRetrievability } from '@/lib/fsrs'
 
-// 获取错题本：高错误率的单词/句子/古诗词（仅 FSRS 学科，阅读与听力不参与）
+// 获取错题本：高错误率的单词/句子（仅 FSRS 学科，阅读与听力不参与）
 export async function GET() {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 })
@@ -12,7 +12,7 @@ export async function GET() {
   const cards = await db.fsrsCard.findMany({
     where: {
       userId: user.id,
-      cardType: { in: ['word', 'sentence', 'chinese'] },
+      cardType: { in: ['word', 'sentence'] },
       OR: [
         { difficulty: { gte: 5 } },
         { lapses: { gte: 1 } },
@@ -33,25 +33,26 @@ export async function GET() {
   const grouped: Record<string, any[]> = {
     word: [],
     sentence: [],
-    chinese: [],
   }
 
   // 按 cardType 分组收集 ID，每类型一次批量查询（避免 N+1），保持原 select 字段
-  const idsOf = (t: string) => sorted.filter(c => c.cardType === t).map(c => parseInt(c.cardId)).filter(n => !isNaN(n))
-  const [wordRows, sentenceRows, chineseRows] = await Promise.all([
-    db.word.findMany({ where: { id: { in: idsOf('word') } }, select: { id: true, en: true, zh: true, pos: true, stage: true, difficulty: true } }),
-    db.sentence.findMany({ where: { id: { in: idsOf('sentence') } }, select: { id: true, en: true, zh: true, grammarPoint: true, stage: true, difficulty: true } }),
-    db.chineseText.findMany({ where: { id: { in: idsOf('chinese') } }, select: { id: true, title: true, author: true, dynasty: true, category: true, wordCount: true, stage: true, difficulty: true } }),
+  // word 卡 cardId 为 head_word 字符串；sentence 卡仍为数字 id
+  const wordIds = sorted.filter(c => c.cardType === 'word').map(c => c.cardId)
+  const sentenceIds = sorted.filter(c => c.cardType === 'sentence').map(c => parseInt(c.cardId)).filter(n => !isNaN(n))
+  const [wordRows, sentenceRows] = await Promise.all([
+    db.wordDict.findMany({ where: { id: { in: wordIds } }, select: { id: true, en: true, zh: true, pos: true, usPhone: true, isPrimary: true, isMiddle: true, isHigh: true } }),
+    db.sentence.findMany({ where: { id: { in: sentenceIds } }, select: { id: true, en: true, zh: true, grammarPoint: true, stage: true, difficulty: true } }),
   ])
-  const itemMaps: Record<string, Map<number, any>> = {
-    word: new Map(wordRows.map(w => [w.id, w])),
+  const itemMaps: Record<string, Map<any, any>> = {
+    // wordDict 无 stage 字段，按学段标签映射回中文学段（错题本 Badge 展示用）
+    word: new Map(wordRows.map(w => [w.id, { ...w, stage: w.isPrimary ? '小学' : w.isMiddle ? '初中' : w.isHigh ? '高中' : '' }])),
     sentence: new Map(sentenceRows.map(s => [s.id, s])),
-    chinese: new Map(chineseRows.map(c => [c.id, c])),
   }
 
   for (const c of sorted) {
     const map = itemMaps[c.cardType]
-    const item = map ? map.get(parseInt(c.cardId)) : null
+    const key = c.cardType === 'word' ? c.cardId : parseInt(c.cardId)
+    const item = map ? map.get(key) : null
     if (item) {
       grouped[c.cardType].push({
         ...item,
@@ -75,7 +76,6 @@ export async function GET() {
     byType: {
       word: grouped.word.length,
       sentence: grouped.sentence.length,
-      chinese: grouped.chinese.length,
     },
     highDifficulty: sorted.filter(c => c.difficulty >= 7).length,
     forgotten: sorted.filter(c => c.lapses >= 2).length,

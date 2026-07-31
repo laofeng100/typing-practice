@@ -65,21 +65,20 @@ export async function POST() {
       db.dailyStat.deleteMany({ where: { userId: user.id } }),
       db.assessment.deleteMany({ where: { userId: user.id } }),
       db.userSetting.deleteMany({ where: { userId: user.id, key: { notIn: PARENT_KEEP_KEYS } } }),
-      // 重置用户学段为小学（放最后）
+      // 重置用户学段为小学 + 教材回默认（人教版三年级上册）（放最后）
       db.user.update({
         where: { id: user.id },
-        data: { stage: '小学', grade: '小升初' },
+        data: { stage: '小学', grade: '小升初', bookId: 'PEPXiaoXue3_1' },
       }),
     ])
 
     // 验证基础教学数据完好
     const preserved = {
-      word: await db.word.count(),
+      word: await db.wordDict.count(),
       grammarPattern: await db.grammarPattern.count(),
       grammarSystem: await db.grammarSystem.count(),
       sentence: await db.sentence.count(),
       readingArticle: await db.readingArticle.count(),
-      chineseText: await db.chineseText.count(),
     }
 
     return NextResponse.json({

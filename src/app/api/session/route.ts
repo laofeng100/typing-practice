@@ -9,7 +9,7 @@ import { computeAchievements } from '@/lib/achievements'
 /**
  * 提交练习结果（通用）
  * body: {
- *   module: 'keyboard'|'word'|'sentence'|'article'|'chinese'|'listening',
+ *   module: 'keyboard'|'word'|'sentence'|'article'|'listening',
  *   subModule?: string,
  *   durationMs: number,
  *   totalKeys, correctKeys, totalChars,
@@ -17,10 +17,10 @@ import { computeAchievements } from '@/lib/achievements'
  *   level?, score?, stars?  // 关卡用
  * }
  */
-const VALID_MODULES = new Set(['keyboard', 'word', 'sentence', 'article', 'chinese', 'listening'])
-// 纳入 FSRS 调度的学科：英语打字（word/sentence）与古诗词背诵（chinese，独立学科队列）；
+const VALID_MODULES = new Set(['keyboard', 'word', 'sentence', 'article', 'listening'])
+// 纳入 FSRS 调度的学科：英语打字（word/sentence）；
 // article/listening 属理解型练习，不建卡、不参与复习调度
-const FSRS_CARD_TYPES = new Set(['word', 'sentence', 'chinese'])
+const FSRS_CARD_TYPES = new Set(['word', 'sentence'])
 
 // 数值兜底：非法/负数一律归零，防御异常 payload
 const num = (v: any) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0)

@@ -20,7 +20,6 @@ export interface UserMetrics {
   wordLearned: number
   sentenceLearned: number
   articleRead: number
-  chineseDone: number
   keyboardCompleted: number
   bestWpm: number
   activeDays: number
@@ -46,7 +45,6 @@ export async function computeUserMetrics(userId: string): Promise<UserMetrics> {
     select: { cardId: true },
   })
   const articleRead = articleReadRecords.length
-  const chineseDone = await db.fsrsCard.count({ where: { userId, cardType: 'chinese', state: { gt: 0 } } })
   const keyboardCompleted = await db.userProgress.count({ where: { userId, module: 'keyboard', status: 'completed' } })
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000)
@@ -78,7 +76,6 @@ export async function computeUserMetrics(userId: string): Promise<UserMetrics> {
     wordLearned,
     sentenceLearned,
     articleRead,
-    chineseDone,
     keyboardCompleted,
     bestWpm: sessionAgg._max.wpm || 0,
     activeDays,
@@ -91,7 +88,7 @@ export async function computeUserMetrics(userId: string): Promise<UserMetrics> {
 // 可传入已算好的 metrics 复用，避免重复查询；不传则内部自行汇总
 export async function computeAchievements(userId: string, metrics?: UserMetrics): Promise<Achievement[]> {
   const m = metrics ?? await computeUserMetrics(userId)
-  const { totalMinutes, wordLearned, sentenceLearned, articleRead, chineseDone, keyboardCompleted, activeDays, streak, sessionCount } = m
+  const { totalMinutes, wordLearned, sentenceLearned, articleRead, keyboardCompleted, activeDays, streak, sessionCount } = m
   const bestWpm = m.bestWpm
   return [
     { id: 'first_login', name: '初次见面', desc: '首次登录系统', icon: '👋', tier: 1,
@@ -136,11 +133,6 @@ export async function computeAchievements(userId: string, metrics?: UserMetrics)
       unlocked: articleRead >= 5, progress: Math.min(articleRead, 5), target: 5, category: '阅读' },
     { id: 'read_20', name: '饱读诗书', desc: '完成20篇阅读', icon: '📚', tier: 2,
       unlocked: articleRead >= 20, progress: Math.min(articleRead, 20), target: 20, category: '阅读' },
-
-    { id: 'cn_5', name: '诗书少年', desc: '背诵5篇中文', icon: '🏮', tier: 1,
-      unlocked: chineseDone >= 5, progress: Math.min(chineseDone, 5), target: 5, category: '中文' },
-    { id: 'cn_20', name: '国学达人', desc: '背诵20篇中文', icon: '🏯', tier: 3,
-      unlocked: chineseDone >= 20, progress: Math.min(chineseDone, 20), target: 20, category: '中文' },
 
     { id: 'time_60', name: '一小时练习', desc: '累计练习60分钟', icon: '⏰', tier: 1,
       unlocked: totalMinutes >= 60, progress: Math.min(totalMinutes, 60), target: 60, category: '时长' },

@@ -77,9 +77,9 @@ export async function GET(req: Request) {
         })
       }
     }
-    // 练习3：综合单词（包含薄弱键的常见单词）
+    // 练习3：综合单词（包含薄弱键的常见单词，取自当前教材词表）
     const wordsWithWeakKeys: string[] = []
-    const words = await db.word.findMany({ where: { stage: user.stage }, take: 200, select: { en: true } })
+    const words = await db.wordDict.findMany({ where: { books: { some: { bookId: user.bookId } } }, take: 200, select: { en: true } })
     for (const w of words) {
       const lower = w.en.toLowerCase()
       if (targetKeys.some(k => lower.includes(k)) && w.en.length >= 3 && w.en.length <= 8) {
@@ -109,13 +109,13 @@ export async function GET(req: Request) {
       take: 100,
     })
     const weakCards = sortWeakCards(weakCardsRaw, 15)
-    // 批量查询，避免 N+1
-    const weakIds = weakCards.map(c => parseInt(c.cardId)).filter(n => !isNaN(n))
-    const wordRows = await db.word.findMany({ where: { id: { in: weakIds } } })
+    // 批量查询，避免 N+1（word 卡 cardId 为 head_word 字符串）
+    const weakIds = weakCards.map(c => c.cardId)
+    const wordRows = await db.wordDict.findMany({ where: { id: { in: weakIds } }, select: { id: true, en: true, zh: true, pos: true, usPhone: true } })
     const wordMap = new Map(wordRows.map(w => [w.id, w]))
     const words: any[] = []
     for (const c of weakCards) {
-      const w = wordMap.get(parseInt(c.cardId))
+      const w = wordMap.get(c.cardId)
       if (w) words.push({ ...w, cardState: c.state, difficulty_card: c.difficulty, lapses: c.lapses, totalErrors: c.totalErrors })
     }
     return NextResponse.json({ type: 'words', words, count: words.length })

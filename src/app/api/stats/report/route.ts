@@ -24,9 +24,9 @@ export async function GET(req: Request) {
     where: { userId: user.id, createdAt: { gte: startDate } },
     orderBy: { createdAt: 'asc' },
   })
-  // 仅统计参与 FSRS 调度的三类卡（article/listening 已退出 FSRS，存量卡不再展示）
+  // 仅统计参与 FSRS 调度的卡片（article/listening 已退出 FSRS，存量卡不再展示）
   const allCards = await db.fsrsCard.findMany({
-    where: { userId: user.id, cardType: { in: ['word', 'sentence', 'chinese'] } },
+    where: { userId: user.id, cardType: { in: ['word', 'sentence'] } },
   })
 
   const totalMs = sessions.reduce((s, sess) => s + sess.durationMs, 0)

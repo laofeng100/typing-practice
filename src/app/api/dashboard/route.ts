@@ -37,8 +37,8 @@ export async function GET() {
   const wpmQualified = bestWpm >= settings.wpmUnlockThreshold && bestAccuracy >= settings.accuracyUnlockThreshold
   const advancedUnlocked = keyboardUnlocked || wpmQualified // 键盘6关通关 或 WPM达标 均可解锁
 
-  // 待复习卡片数（仅 FSRS 学科：单词/句子/古诗词，阅读与听力不参与调度）
-  const FSRS_TYPES = ['word', 'sentence', 'chinese']
+  // 待复习卡片数（仅 FSRS 学科：单词/句子，阅读与听力不参与调度）
+  const FSRS_TYPES = ['word', 'sentence']
   const dueCards = await db.fsrsCard.count({
     where: { userId: user.id, cardType: { in: FSRS_TYPES }, due: { lte: new Date() }, state: { gt: 0 } },
   })
@@ -79,6 +79,8 @@ export async function GET() {
 
   const { phone: _phone, ...safeUser } = user
   const maskedSettings = { ...settings, ttsToken: settings.ttsToken ? '••••••••' : '' }
+  // 当前教材信息（首页展示用）
+  const currentBook = await db.book.findUnique({ where: { id: user.bookId } })
   return NextResponse.json({
     user: safeUser,
     settings: maskedSettings,
@@ -93,5 +95,6 @@ export async function GET() {
     wordProgress,
     recentSessions,
     streak,
+    currentBookTitle: currentBook?.title || null,
   })
 }

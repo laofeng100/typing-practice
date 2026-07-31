@@ -3,20 +3,28 @@ import { getCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { getSettings, checkDailyLimit } from '@/lib/settings'
 import { calculateRetrievability } from '@/lib/fsrs'
+import { bookSortKey } from '@/app/api/books/route'
 
-// 学段顺序
-const STAGE_ORDER = ['小学', '初中', '高中']
+// 学段顺序（与 Book.stage 对应）
+const STAGE_ORDER = ['primary', 'middle', 'high']
+const STAGE_LABEL: Record<string, string> = { primary: '小学', middle: '初中', high: '高中' }
+
+// 词条详情 select（新词/复习词共用）：音标/记忆法/例句/短语/近义词/相关词
+const wordDetailSelect = {
+  id: true, en: true, zh: true, pos: true, usPhone: true, ukPhone: true, memoryMethod: true,
+  examples: { take: 3, orderBy: { ord: 'asc' as const }, select: { en: true, cn: true } },
+  phrases: { take: 5, orderBy: { ord: 'asc' as const }, select: { phrase: true, cn: true } },
+  synonyms: { select: { pos: true, word: true, tranCn: true } },
+  related: { select: { pos: true, word: true, tranCn: true } },
+}
 
 /**
  * 获取今日练习队列：新词 + 待复习词
  *
- * 学段晋级逻辑：
- * - 新词从用户当前学段获取
- * - 如果当前学段所有词都已学完（state>0），自动晋级到下一学段
- * - 复习词跨学段（所有已学过的到期卡片都会复习）
- *
- * 性能优化：避免使用 notIn 传大量ID（SQLite参数限制），
- * 改用分批查询已学ID + 内存过滤
+ * 教材推进逻辑：
+ * - 新词从用户当前教材（user.bookId）按教材词序（wordRank）获取
+ * - 当前教材全部学完后，自动晋级：同版本下一册 → 跨学段第一本 → 末本停留
+ * - 复习词跨教材（所有已学过的到期卡片都会复习）
  */
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser()
@@ -34,7 +42,7 @@ export async function GET(req: NextRequest) {
   const mode = searchParams.get('mode') || 'mixed'
   const settings = await getSettings(user.id)
 
-  // ===== 复习词：跨学段获取到期卡片，按实时可提取性 R 升序（最可能遗忘的优先） =====
+  // ===== 复习词：跨教材获取到期卡片，按实时可提取性 R 升序（最可能遗忘的优先） =====
   const now = new Date()
   const cramAheadDays = settings.examCramMode ? 7 : 0 // 考前突击：提前拉取未来7天到期的卡
   const dueCardsRaw = await db.fsrsCard.findMany({
@@ -58,18 +66,17 @@ export async function GET(req: NextRequest) {
     where: { userId: user.id, cardType: 'word', state: { gt: 0 } },
     select: { cardId: true },
   })
-  const learnedWordIds = new Set<string>()
-  const learnedNums: number[] = []
-  for (const c of allCards) {
-    learnedWordIds.add(c.cardId)
-    const n = parseInt(c.cardId)
-    if (!isNaN(n)) learnedNums.push(n)
-  }
+  const learnedWordIds = new Set<string>(allCards.map(c => c.cardId))
 
-  // ===== 新词获取（含自动学段晋级） =====
+  // ===== 新词获取（含自动教材推进） =====
   const newWords: any[] = []
-  let currentStage = user.stage
   let stageUpgraded = false
+  let currentBook = await db.book.findUnique({ where: { id: user.bookId } })
+  if (!currentBook) {
+    // 兜底：bookId 数据异常时取第一本
+    const allBooks = await db.book.findMany()
+    currentBook = allBooks.sort((a, b) => bookSortKey(a).localeCompare(bookSortKey(b)))[0]
+  }
 
   // 积压防护：复习债越多，新词越少，避免滚雪球
   const newWordTarget = mode === 'new'
@@ -81,133 +88,141 @@ export async function GET(req: NextRequest) {
         : settings.wordBatchSize
 
   if ((mode === 'new' || mode === 'mixed') && newWordTarget > 0) {
-    // 获取当前学段的候选新词（多取一些，内存过滤已学的）
-    // SQLite notIn 有参数限制，所以用内存过滤
-    const candidateBatch = Math.min(settings.wordBatchSize * 5, 200) // 取5倍候选量
-
-    // 第一次尝试：从当前学段获取候选
-    let candidates = await db.word.findMany({
-      where: { stage: currentStage },
-      orderBy: [{ difficulty: 'asc' }, { id: 'asc' }],
-      take: candidateBatch,
+    // 当前教材词集（教材词最多几百，一次拉取，内存按 wordRank 排序）
+    let bookWordRows = await db.bookWord.findMany({
+      where: { bookId: currentBook.id },
+      select: { wordId: true, wordRank: true },
     })
+    let candidates = await fetchBookCandidates(currentBook.id, bookWordRows.map(r => r.wordId))
+    candidates.sort((a, b) => (a.books[0]?.wordRank ?? 999999) - (b.books[0]?.wordRank ?? 999999))
+    let newWordRows = candidates.filter(w => !learnedWordIds.has(w.id))
 
-    // 内存过滤已学的
-    let newWordRows = candidates.filter(w => !learnedWordIds.has(String(w.id)))
-
-    // 如果候选不足，可能是因为当前学段剩余词不够，检查是否需要晋级
-    if (newWordRows.length === 0) {
-      // 检查当前学段是否真的全部学完
-      const currentStageTotal = await db.word.count({ where: { stage: currentStage } })
-      // 内存交集统计已学数（避免 take 截断导致无法晋级）
-      const currentStageWordIds = await db.word.findMany({ where: { stage: currentStage }, select: { id: true } })
-      const currentStageLearned = currentStageWordIds.filter(w => learnedWordIds.has(String(w.id))).length
-
-      if (currentStageLearned >= currentStageTotal) {
-        // 自动晋级
-        const currentIdx = STAGE_ORDER.indexOf(currentStage)
-        if (currentIdx < STAGE_ORDER.length - 1) {
-          currentStage = STAGE_ORDER[currentIdx + 1]
-          stageUpgraded = true
-          // 更新用户学段
-          await db.user.update({
-            where: { id: user.id },
-            data: { stage: currentStage },
-          })
-          // 从新学段获取新词
-          candidates = await db.word.findMany({
-            where: { stage: currentStage },
-            orderBy: [{ difficulty: 'asc' }, { id: 'asc' }],
-            take: candidateBatch,
-          })
-          newWordRows = candidates.filter(w => !learnedWordIds.has(String(w.id)))
-        }
-      }
-    }
-
-    // 如果候选量不够（已学的一部分在候选里），继续取更多
-    let offset = candidateBatch
-    while (newWordRows.length < newWordTarget && offset < 10000) {
-      const more = await db.word.findMany({
-        where: { stage: currentStage },
-        orderBy: [{ difficulty: 'asc' }, { id: 'asc' }],
-        skip: offset,
-        take: candidateBatch,
+    // 当前教材全部学完 → 自动推进（同版本下一册 → 跨学段第一本 → 末本停留）
+    let guard = 0
+    while (newWordRows.length === 0 && bookWordRows.length > 0 && guard < 10) {
+      const nextBook = await findNextBook(currentBook)
+      if (!nextBook) break
+      await db.user.update({ where: { id: user.id }, data: { bookId: nextBook.id } })
+      currentBook = nextBook
+      stageUpgraded = true
+      bookWordRows = await db.bookWord.findMany({
+        where: { bookId: currentBook.id },
+        select: { wordId: true, wordRank: true },
       })
-      if (more.length === 0) break
-      newWordRows.push(...more.filter(w => !learnedWordIds.has(String(w.id))))
-      offset += candidateBatch
+      candidates = await fetchBookCandidates(currentBook.id, bookWordRows.map(r => r.wordId))
+      candidates.sort((a, b) => (a.books[0]?.wordRank ?? 999999) - (b.books[0]?.wordRank ?? 999999))
+      newWordRows = candidates.filter(w => !learnedWordIds.has(w.id))
+      guard++
     }
 
     newWordRows = newWordRows.slice(0, newWordTarget)
 
     for (const w of newWordRows) {
       const card = await db.fsrsCard.findUnique({
-        where: { userId_cardType_cardId: { userId: user.id, cardType: 'word', cardId: String(w.id) } },
+        where: { userId_cardType_cardId: { userId: user.id, cardType: 'word', cardId: w.id } },
       })
-      newWords.push({ ...w, cardState: card?.state || 0 })
+      const { books, ...rest } = w
+      newWords.push({ ...rest, wordRank: books[0]?.wordRank ?? null, cardState: card?.state || 0 })
     }
   }
 
   // ===== 复习词详情（批量查询，避免 N+1） =====
   const reviewWords: any[] = []
-  const dueIds = dueCards.map(c => parseInt(c.cardId)).filter(n => !isNaN(n))
-  const wordRows = await db.word.findMany({ where: { id: { in: dueIds } } })
-  const wordMap = new Map(wordRows.map(w => [w.id, w]))
-  for (const c of dueCards) {
-    const w = wordMap.get(parseInt(c.cardId))
-    if (w) {
-      reviewWords.push({
-        ...w,
-        cardState: c.state,
-        stability: c.stability,
-        difficulty: c.difficulty,
-        // 实时计算可提取性（库存值恒为1.0，不可信）
-        retrievability: calculateRetrievability({
+  const dueIds = dueCards.map(c => c.cardId) // head_word 字符串，不再 parseInt
+  if (dueIds.length > 0) {
+    const wordRows = await db.wordDict.findMany({
+      where: { id: { in: dueIds } },
+      select: wordDetailSelect,
+    })
+    const wordMap = new Map(wordRows.map(w => [w.id, w]))
+    for (const c of dueCards) {
+      const w = wordMap.get(c.cardId)
+      if (w) {
+        reviewWords.push({
+          ...w,
+          wordRank: null, // 复习词跨教材，无单一教材词序
+          cardState: c.state,
           stability: c.stability,
           difficulty: c.difficulty,
-          retrievability: c.retrievability,
-          due: c.due,
-          lastReview: c.lastReview,
+          // 实时计算可提取性（库存值恒为1.0，不可信）
+          retrievability: calculateRetrievability({
+            stability: c.stability,
+            difficulty: c.difficulty,
+            retrievability: c.retrievability,
+            due: c.due,
+            lastReview: c.lastReview,
+            reps: c.reps,
+            lapses: c.lapses,
+            state: c.state,
+          }),
           reps: c.reps,
           lapses: c.lapses,
-          state: c.state,
-        }),
-        reps: c.reps,
-        lapses: c.lapses,
-      })
+        })
+      }
     }
   }
 
   // ===== 统计 =====
   const totalLearned = allCards.length
 
-  // 当前学段进度（用count查询，不用notIn）
-  const currentStageTotal = await db.word.count({ where: { stage: currentStage } })
-  // 当前学段已学数：获取该学段所有词ID，和已学ID取交集
-  const currentStageWordIds = (await db.word.findMany({ where: { stage: currentStage }, select: { id: true } })).map(w => String(w.id))
-  const currentStageLearned = currentStageWordIds.filter(id => learnedWordIds.has(id)).length
+  // 当前教材进度（用 BookWord 实计数）
+  const currentBookRows = await db.bookWord.findMany({ where: { bookId: currentBook.id }, select: { wordId: true } })
+  const currentBookTotal = currentBookRows.length
+  const currentBookLearned = currentBookRows.filter(r => learnedWordIds.has(r.wordId)).length
 
-  // 累计学段词库总量（当前及之前）
-  const currentStageIdx = STAGE_ORDER.indexOf(currentStage)
-  const stagesToCount = STAGE_ORDER.slice(0, currentStageIdx + 1)
-  const totalWordsCurrent = await db.word.count({ where: { stage: { in: stagesToCount } } })
+  // 全部词库去重词总数（展示用）
+  const totalWordsCurrent = await db.wordDict.count()
 
   return NextResponse.json({
     mode,
     newWords,
     reviewWords,
-    currentStage,
+    currentStage: STAGE_LABEL[currentBook.stage] || currentBook.stage,
     stageUpgraded,
+    currentBook: {
+      id: currentBook.id,
+      title: currentBook.title,
+      version: currentBook.version,
+      stage: currentBook.stage,
+      grade: currentBook.grade,
+      term: currentBook.term,
+    },
     stats: {
       totalLearned,
       totalWords: totalWordsCurrent,
       dueCount,
       backlog: dueCount > settings.wordReviewBatchSize * 3,
       newCount: newWords.length,
-      currentStageLearned,
-      currentStageTotal,
-      currentStageProgress: currentStageTotal > 0 ? Math.round((currentStageLearned / currentStageTotal) * 100) : 0,
+      currentStageLearned: currentBookLearned,
+      currentStageTotal: currentBookTotal,
+      currentStageProgress: currentBookTotal > 0 ? Math.round((currentBookLearned / currentBookTotal) * 100) : 0,
     },
   })
+}
+
+// 批量取词详情（含音标/记忆法/例句/短语/近义词/相关词 + 教材词序）
+async function fetchBookCandidates(bookId: string, wordIds: string[]) {
+  if (wordIds.length === 0) return []
+  return db.wordDict.findMany({
+    where: { id: { in: wordIds } },
+    select: {
+      ...wordDetailSelect,
+      books: { where: { bookId }, select: { wordRank: true } },
+    },
+  })
+}
+
+// 教材推进：同 version 同 stage 的下一册（grade/term 升序）；无则跨学段取下一 stage 第一本
+async function findNextBook(currentBook: { id: string; stage: string; version: string | null }) {
+  const sameVersionBooks = await db.book.findMany({
+    where: { stage: currentBook.stage, version: currentBook.version },
+    orderBy: [{ grade: 'asc' }, { term: 'asc' }],
+  })
+  const idx = sameVersionBooks.findIndex(b => b.id === currentBook.id)
+  if (idx >= 0 && idx < sameVersionBooks.length - 1) return sameVersionBooks[idx + 1]
+
+  const nextStageIdx = STAGE_ORDER.indexOf(currentBook.stage) + 1
+  if (nextStageIdx >= STAGE_ORDER.length) return null
+  const nextStageBooks = await db.book.findMany({ where: { stage: STAGE_ORDER[nextStageIdx] } })
+  return nextStageBooks.sort((a, b) => bookSortKey(a).localeCompare(bookSortKey(b)))[0] || null
 }

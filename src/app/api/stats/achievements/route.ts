@@ -46,7 +46,6 @@ export async function GET() {
       wordLearned: metrics.wordLearned,
       sentenceLearned: metrics.sentenceLearned,
       articleRead: metrics.articleRead,
-      chineseDone: metrics.chineseDone,
       keyboardCompleted: metrics.keyboardCompleted,
       bestWpm: metrics.bestWpm,
       streak: metrics.streak,
