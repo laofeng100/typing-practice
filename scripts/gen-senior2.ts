@@ -33,7 +33,7 @@ for (let i = 0; i < todo.length; i++) {
       await db.listeningArticle.create({ data: { id: id++, stage: '高中', order: cnt+1, title: o.title, category: a.c, content: o.content, contentZh: o.contentZh||'', wordCount: o.wordCount||0, questions: JSON.stringify(o.questions||[]), vocabulary: JSON.stringify(o.vocabulary||[]), difficulty: 'B1' } })
       console.log('  ok: ' + o.title)
     } else { console.log('  parse fail') }
-  } catch(e) { console.log('  err: ' + (e.message||'').slice(0,80)) }
+  } catch(e: any) { console.log('  err: ' + (e.message||'').slice(0,80)) }
 }
 
 console.log('\n高中: ' + await db.listeningArticle.count({where:{stage:'高中'}}) + '篇')

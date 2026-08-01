@@ -44,7 +44,7 @@ async function gen(stage: string, items: {c:string,t:string}[], diff: string, wc
         await db.listeningArticle.create({ data: { id: id++, stage, order: cnt+1, title: o.title, category: a.c, content: o.content, contentZh: o.contentZh||'', wordCount: o.wordCount||0, questions: JSON.stringify(o.questions||[]), vocabulary: JSON.stringify(o.vocabulary||[]), difficulty: diff } })
         console.log('  ok: ' + o.title)
       } else { console.log('  parse fail') }
-    } catch(e) { console.log('  err: ' + (e.message||'').slice(0,60)) }
+    } catch(e: any) { console.log('  err: ' + (e.message||'').slice(0,60)) }
   }
 }
 
