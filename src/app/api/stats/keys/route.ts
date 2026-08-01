@@ -8,9 +8,13 @@ export async function GET() {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 })
 
+  // 键位诊断只看近 90 天：全量历史会被早期练习习惯稀释（学生进步后旧错误仍占权重），
+  // 且随练习时间增长查询无上限；趋势图另有 30 天窗口
+  const KEY_STATS_WINDOW_DAYS = 90
+  const keyStatsWindowStart = new Date(Date.now() - KEY_STATS_WINDOW_DAYS * 86400000)
   const records = await db.typingRecord.findMany({
-    where: { userId: user.id },
-    select: { errorKeysList: true, totalKeys: true, errorKeys: true, module: true },
+    where: { userId: user.id, createdAt: { gte: keyStatsWindowStart } },
+    select: { errorKeysList: true, totalKeys: true, errorKeys: true },
   })
 
   const keyStats: Record<string, { total: number; errors: number; accuracy: number }> = {}

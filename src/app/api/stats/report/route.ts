@@ -25,9 +25,20 @@ export async function GET(req: Request) {
     orderBy: { createdAt: 'asc' },
   })
   // 仅统计参与 FSRS 调度的卡片（article/listening 已退出 FSRS，存量卡不再展示）
-  const allCards = await db.fsrsCard.findMany({
-    where: { userId: user.id, cardType: { in: ['word', 'sentence'] } },
-  })
+  // SQL 侧聚合（groupBy/count），替代原"全量拉卡再内存统计"
+  const nowDate = new Date()
+  const [stateAgg, dueAgg] = await Promise.all([
+    db.fsrsCard.groupBy({
+      by: ['cardType', 'state'],
+      where: { userId: user.id, cardType: { in: ['word', 'sentence'] } },
+      _count: { _all: true },
+    }),
+    db.fsrsCard.groupBy({
+      by: ['cardType'],
+      where: { userId: user.id, cardType: { in: ['word', 'sentence'] }, due: { lte: nowDate }, state: { gt: 0 } },
+      _count: { _all: true },
+    }),
+  ])
 
   const totalMs = sessions.reduce((s, sess) => s + sess.durationMs, 0)
   const totalMinutes = Math.floor(totalMs / 60000)
@@ -66,13 +77,15 @@ export async function GET(req: Request) {
   const topErrorKeys = Object.entries(errorKeysMap).sort((a, b) => b[1] - a[1]).slice(0, 10)
 
   const cardsByType: Record<string, { total: number; learning: number; review: number; due: number }> = {}
-  const nowDate = new Date()
-  for (const c of allCards) {
-    if (!cardsByType[c.cardType]) cardsByType[c.cardType] = { total: 0, learning: 0, review: 0, due: 0 }
-    cardsByType[c.cardType].total++
-    if (c.state === 1) cardsByType[c.cardType].learning++
-    if (c.state === 2 || c.state === 3) cardsByType[c.cardType].review++
-    if (c.due <= nowDate && c.state > 0) cardsByType[c.cardType].due++
+  for (const g of stateAgg) {
+    if (!cardsByType[g.cardType]) cardsByType[g.cardType] = { total: 0, learning: 0, review: 0, due: 0 }
+    cardsByType[g.cardType].total += g._count._all
+    if (g.state === 1) cardsByType[g.cardType].learning += g._count._all
+    if (g.state === 2 || g.state === 3) cardsByType[g.cardType].review += g._count._all
+  }
+  for (const g of dueAgg) {
+    if (!cardsByType[g.cardType]) cardsByType[g.cardType] = { total: 0, learning: 0, review: 0, due: 0 }
+    cardsByType[g.cardType].due = g._count._all
   }
 
   const allDays = await db.dailyStat.findMany({

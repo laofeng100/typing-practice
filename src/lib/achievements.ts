@@ -55,11 +55,11 @@ export async function computeUserMetrics(userId: string): Promise<UserMetrics> {
   const activeDays = new Set(recentSessions.map(s => localDateStr(s.startedAt))).size
 
   // 连续打卡天数：从今天（若今天未练则从昨天）向前逐日回溯
+  // dailyStat 每天最多一行，全量读取（take 400 会截断超 400 天的连续打卡）
   const practiceDays = await db.dailyStat.findMany({
     where: { userId, totalMs: { gt: 0 } },
     orderBy: { date: 'desc' },
     select: { date: true },
-    take: 400,
   })
   const daySet = new Set(practiceDays.map(d => d.date))
   let streak = 0

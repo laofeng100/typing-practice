@@ -118,21 +118,21 @@ export default function KeyHeatmap({ onClose }: { onClose?: () => void }) {
           <CardContent className="pt-4 text-center">
             <Keyboard className="w-5 h-5 mx-auto text-primary mb-1" />
             <div className="text-2xl font-bold">{data.totalAllKeys.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">总击键数</div>
+            <div className="text-xs text-muted-foreground">近90天击键数</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 text-center">
             <CheckCircle2 className="w-5 h-5 mx-auto text-success mb-1" />
             <div className="text-2xl font-bold text-success">{data.overallAccuracy}%</div>
-            <div className="text-xs text-muted-foreground">总准确率</div>
+            <div className="text-xs text-muted-foreground">近90天准确率</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 text-center">
             <AlertTriangle className="w-5 h-5 mx-auto text-destructive mb-1" />
             <div className="text-2xl font-bold text-destructive">{data.totalAllErrors}</div>
-            <div className="text-xs text-muted-foreground">总错误数</div>
+            <div className="text-xs text-muted-foreground">近90天错误数</div>
           </CardContent>
         </Card>
         <Card>

@@ -62,11 +62,11 @@ export async function GET() {
   })
 
   // 真实连续打卡天数（从今天/昨天往前连续有练习的天数）
+  // dailyStat 每天最多一行，全量读取（take 400 会截断超 400 天的连续打卡）
   const practiceDays = await db.dailyStat.findMany({
     where: { userId: user.id, totalMs: { gt: 0 } },
     select: { date: true },
     orderBy: { date: 'desc' },
-    take: 400,
   })
   const daySet = new Set(practiceDays.map(d => d.date))
   let streak = 0
