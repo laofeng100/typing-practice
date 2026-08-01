@@ -8,13 +8,14 @@ export async function GET() {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 })
 
-  // 查找FSRS卡片中难度高、遗忘次数多的卡片
+  // 查找错误积累多的卡片：
+  // 注意不能用 difficulty>=5 做门槛——首学评 Hard 难度即达 5.11，会把所有首学 Hard 的卡全量收进错题本，
+  // 错题本应聚焦"实际出错"的卡（遗忘过 / 累计错 ≥2 次）
   const cards = await db.fsrsCard.findMany({
     where: {
       userId: user.id,
       cardType: { in: ['word', 'sentence'] },
       OR: [
-        { difficulty: { gte: 5 } },
         { lapses: { gte: 1 } },
         { totalErrors: { gte: 2 } },
       ],

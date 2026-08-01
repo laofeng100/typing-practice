@@ -45,6 +45,11 @@ export function getFsrs(retention?: number, maxInterval?: number): FSRS {
       request_retention: r,
       maximum_interval: m,
       enable_fuzz: DEFAULT_PARAMS.enableFuzz,
+      // 本项目按"天"粒度调度（每天打开应用复习），不启用分钟级学习步进：
+      // ts-fsrs 默认 learning_steps=["1m","10m"] 会让首学卡停留在 Learning 状态并分钟级排期，
+      // 与按天调度冲突导致卡片永远无法进入 Review（FSRS 记忆调度失效）
+      learning_steps: [],
+      relearning_steps: [],
     }))
     fsrsCache.set(key, inst)
   }
@@ -148,15 +153,11 @@ export function schedule(
 ): FsrsCardState {
   const fsrsInstance = getFsrs(retention, maxInterval)
   const tsCard = toFsrsCard(card)
+  // 复习时刻的可提取性 = 提交评级前旧卡的实时 R（新卡 lastReview=now 算出来恒为 1.0，无意义）
+  const retrievability = calculateRetrievability(card, now)
   const result = fsrsInstance.repeat(tsCard, now)
   const resultItem: RecordLogItem = result[rating]
   const newCard = resultItem.card
-
-  // 计算复习时刻的可提取性（应接近1.0）
-  const retrievability = calculateRetrievability(
-    fromFsrsCard(newCard, 0),
-    now
-  )
 
   return fromFsrsCard(newCard, retrievability)
 }
@@ -177,6 +178,8 @@ export function rateTyping(accuracy: number, wpm: number, responseMs: number = 0
 
   // 准确率低于60%直接判为遗忘
   if (accuracy < 0.6) return Rating.Again
+  // 准确率 60%~80%：未达"记住"标准（80%），打字快只说明动作熟练，最多 Hard，不升 Good/Easy
+  if (accuracy < 0.8) return Rating.Hard
   if (score >= 0.92) return Rating.Easy
   if (score >= 0.72) return Rating.Good
   return Rating.Hard

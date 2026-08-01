@@ -45,11 +45,12 @@ export async function GET(req: NextRequest) {
   // ===== 复习词：跨教材获取到期卡片，按实时可提取性 R 升序（最可能遗忘的优先） =====
   const now = new Date()
   const cramAheadDays = settings.examCramMode ? 7 : 0 // 考前突击：提前拉取未来7天到期的卡
+  const dueBefore = new Date(now.getTime() + cramAheadDays * 86400000)
   const dueCardsRaw = await db.fsrsCard.findMany({
     where: {
       userId: user.id,
       cardType: 'word',
-      due: { lte: new Date(now.getTime() + cramAheadDays * 86400000) },
+      due: { lte: dueBefore },
       state: { gt: 0 },
     },
     take: settings.wordReviewBatchSize * 3,
@@ -59,14 +60,15 @@ export async function GET(req: NextRequest) {
     .map(c => ({ ...c, liveR: calculateRetrievability(c, now) }))
     .sort((a, b) => a.liveR - b.liveR)
     .slice(0, settings.wordReviewBatchSize)
-  const dueCount = dueCardsRaw.length // 积压量（用于新词减发防护）
-
-  // ===== 已学单词ID集合（仅获取ID，避免大量字段） =====
-  const allCards = await db.fsrsCard.findMany({
-    where: { userId: user.id, cardType: 'word', state: { gt: 0 } },
-    select: { cardId: true },
+  // 积压量必须用真实 count（findMany 的 take 会截断，截断后的长度会让积压防护失效）
+  const dueCount = await db.fsrsCard.count({
+    where: {
+      userId: user.id,
+      cardType: 'word',
+      due: { lte: dueBefore },
+      state: { gt: 0 },
+    },
   })
-  const learnedWordIds = new Set<string>(allCards.map(c => c.cardId))
 
   // ===== 新词获取（含自动教材推进） =====
   const newWords: any[] = []
@@ -87,19 +89,31 @@ export async function GET(req: NextRequest) {
         ? Math.ceil(settings.wordBatchSize / 2)
         : settings.wordBatchSize
 
-  if ((mode === 'new' || mode === 'mixed') && newWordTarget > 0) {
-    // 当前教材词集（教材词最多几百，一次拉取，内存按 wordRank 排序）
+  const needNewWords = (mode === 'new' || mode === 'mixed') && newWordTarget > 0
+
+  // 已学单词ID集合（仅新词模式需要：过滤候选词；纯复习模式用 SQL count 统计，不拉全量）
+  let learnedWordIds = new Set<string>()
+  if (needNewWords) {
+    const allCards = await db.fsrsCard.findMany({
+      where: { userId: user.id, cardType: 'word', state: { gt: 0 } },
+      select: { cardId: true },
+    })
+    learnedWordIds = new Set<string>(allCards.map(c => c.cardId))
+  }
+
+  if (needNewWords) {
+    // 当前教材词集（教材词最多几百，一次拉取，按 wordRank 排序）
     let bookWordRows = await db.bookWord.findMany({
       where: { bookId: currentBook.id },
       select: { wordId: true, wordRank: true },
     })
-    let candidates = await fetchBookCandidates(currentBook.id, bookWordRows.map(r => r.wordId))
-    candidates.sort((a, b) => (a.books[0]?.wordRank ?? 999999) - (b.books[0]?.wordRank ?? 999999))
-    let newWordRows = candidates.filter(w => !learnedWordIds.has(w.id))
+    let unlearnedRows = bookWordRows
+      .filter(r => !learnedWordIds.has(r.wordId))
+      .sort((a, b) => (a.wordRank ?? 999999) - (b.wordRank ?? 999999))
 
     // 当前教材全部学完 → 自动推进（同版本下一册 → 跨学段第一本 → 末本停留）
     let guard = 0
-    while (newWordRows.length === 0 && bookWordRows.length > 0 && guard < 10) {
+    while (unlearnedRows.length === 0 && bookWordRows.length > 0 && guard < 10) {
       const nextBook = await findNextBook(currentBook)
       if (!nextBook) break
       await db.user.update({ where: { id: user.id }, data: { bookId: nextBook.id } })
@@ -109,20 +123,32 @@ export async function GET(req: NextRequest) {
         where: { bookId: currentBook.id },
         select: { wordId: true, wordRank: true },
       })
-      candidates = await fetchBookCandidates(currentBook.id, bookWordRows.map(r => r.wordId))
-      candidates.sort((a, b) => (a.books[0]?.wordRank ?? 999999) - (b.books[0]?.wordRank ?? 999999))
-      newWordRows = candidates.filter(w => !learnedWordIds.has(w.id))
+      unlearnedRows = bookWordRows
+        .filter(r => !learnedWordIds.has(r.wordId))
+        .sort((a, b) => (a.wordRank ?? 999999) - (b.wordRank ?? 999999))
       guard++
     }
 
-    newWordRows = newWordRows.slice(0, newWordTarget)
-
-    for (const w of newWordRows) {
-      const card = await db.fsrsCard.findUnique({
-        where: { userId_cardType_cardId: { userId: user.id, cardType: 'word', cardId: w.id } },
+    // 只按需取目标数量的词详情（原实现先拉全教材词详情再 slice，
+    // 详情含例句/短语/近义词/相关词，全教材拉取开销大）
+    const newWordIds = unlearnedRows.slice(0, newWordTarget).map(r => r.wordId)
+    if (newWordIds.length > 0) {
+      const detailRows = await db.wordDict.findMany({
+        where: { id: { in: newWordIds } },
+        select: {
+          ...wordDetailSelect,
+          books: { where: { bookId: currentBook.id }, select: { wordRank: true } },
+        },
       })
-      const { books, ...rest } = w
-      newWords.push({ ...rest, wordRank: books[0]?.wordRank ?? null, cardState: card?.state || 0 })
+      const rankMap = new Map(unlearnedRows.map(r => [r.wordId, r.wordRank]))
+      detailRows.sort((a, b) => (rankMap.get(a.id) ?? 999999) - (rankMap.get(b.id) ?? 999999))
+      for (const w of detailRows) {
+        const card = await db.fsrsCard.findUnique({
+          where: { userId_cardType_cardId: { userId: user.id, cardType: 'word', cardId: w.id } },
+        })
+        const { books, ...rest } = w
+        newWords.push({ ...rest, wordRank: books[0]?.wordRank ?? null, cardState: card?.state || 0 })
+      }
     }
   }
 
@@ -163,12 +189,20 @@ export async function GET(req: NextRequest) {
   }
 
   // ===== 统计 =====
-  const totalLearned = allCards.length
-
-  // 当前教材进度（用 BookWord 实计数）
+  // 已学总数与当前教材进度用 SQL count（不再依赖全量已学 ID 集合）
   const currentBookRows = await db.bookWord.findMany({ where: { bookId: currentBook.id }, select: { wordId: true } })
   const currentBookTotal = currentBookRows.length
-  const currentBookLearned = currentBookRows.filter(r => learnedWordIds.has(r.wordId)).length
+  const [totalLearned, currentBookLearned] = await Promise.all([
+    db.fsrsCard.count({ where: { userId: user.id, cardType: 'word', state: { gt: 0 } } }),
+    db.fsrsCard.count({
+      where: {
+        userId: user.id,
+        cardType: 'word',
+        state: { gt: 0 },
+        cardId: { in: currentBookRows.map(r => r.wordId) },
+      },
+    }),
+  ])
 
   // 全部词库去重词总数（展示用）
   const totalWordsCurrent = await db.wordDict.count()
@@ -196,18 +230,6 @@ export async function GET(req: NextRequest) {
       currentStageLearned: currentBookLearned,
       currentStageTotal: currentBookTotal,
       currentStageProgress: currentBookTotal > 0 ? Math.round((currentBookLearned / currentBookTotal) * 100) : 0,
-    },
-  })
-}
-
-// 批量取词详情（含音标/记忆法/例句/短语/近义词/相关词 + 教材词序）
-async function fetchBookCandidates(bookId: string, wordIds: string[]) {
-  if (wordIds.length === 0) return []
-  return db.wordDict.findMany({
-    where: { id: { in: wordIds } },
-    select: {
-      ...wordDetailSelect,
-      books: { where: { bookId }, select: { wordRank: true } },
     },
   })
 }
