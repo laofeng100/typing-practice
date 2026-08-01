@@ -56,9 +56,18 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
   const [autoPlayDone, setAutoPlayDone] = useState(false) // 新词自动播放是否完成
   const tts = useTTS()
   const [loading, setLoading] = useState(false)
+
+  // 卸载时清理错词自动跳转计时器（防止退出练习后计时器残留触发）
+  useEffect(() => {
+    return () => {
+      if (wrongTimerRef.current) { clearTimeout(wrongTimerRef.current); wrongTimerRef.current = null }
+    }
+  }, [])
   const [showZh, setShowZh] = useState(true)
   const [flash, setFlash] = useState<'correct' | 'wrong' | null>(null) // 完成描边闪（纯视觉，不影响推进时序）
-  const [wrongReview, setWrongReview] = useState(false) // 打错后的复习状态：等待回车/继续或改对
+  const [wrongReview, setWrongReview] = useState(false) // 打错后的复习状态：等待回车/继续/改对或5秒自动跳转
+  const [wrongEdited, setWrongEdited] = useState(false) // 打错后是否已用退格修改（取消5秒自动跳转，改由学生手动继续）
+  const wrongTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null) // 打错后5秒自动跳转计时器
   const inputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
 
@@ -191,6 +200,8 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
     const now = Date.now()
     // 该词是否有扩展内容（例句/短语/近义词），决定完成后停留时长
     const hasExtras = !!(currentWord.examples?.length || currentWord.phrases?.length || currentWord.synonyms?.length || currentWord.related?.length)
+    // 新词判断：新词模式中全部是新词；混合模式中 cardState=0 的是新词；复习模式全部是旧词
+    const isNewWord = practiceMode === 'new' || (!currentWord.cardState || currentWord.cardState === 0)
     if (wrongReview && v.length > currentWord.en.length) return // 复习状态禁止超长输入
     if (!startTimeRef.current && v.length > 0) startTimeRef.current = now
     setInput(v)
@@ -200,6 +211,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
     // 错误复习状态：改对后自动前进，不再重复记录
     if (wrongReview) {
       if (v === currentWord.en) {
+        if (wrongTimerRef.current) { clearTimeout(wrongTimerRef.current); wrongTimerRef.current = null }
         setWrongReview(false)
         advancingRef.current = true
         setFlash('correct')
@@ -248,15 +260,30 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
 
     if (isCorrect) {
       advancingRef.current = true
-      goNext(hasExtras ? 1600 : 500)
+      if (isNewWord) {
+        // 新词学习：锁定输入，学习区（短语/例句）已直接展示，学生阅读完手动前进
+        // （不自动跳转，避免来不及看短语/例句）
+      } else {
+        // 复习词：答对后短暂停留（有扩展内容时稍长，便于浏览完成面板）再自动前进
+        goNext(hasExtras ? 1600 : 500)
+      }
     } else {
-      // 打错：进入复习状态，按回车/点继续或改对后才前进
+      // 打错：显示提示 + 5 秒后自动跳转；回车立即继续，或退格修改后取消自动跳转
       setWrongReview(true)
+      setWrongEdited(false)
+      if (wrongTimerRef.current) clearTimeout(wrongTimerRef.current)
+      wrongTimerRef.current = setTimeout(() => {
+        wrongTimerRef.current = null
+        if (advancingRef.current) return // 学生已手动前进/改对，不再重复跳转
+        advancingRef.current = true
+        goNext(0)
+      }, 5000)
     }
   }
 
   // 前进到下一词（或结束练习）
   const goNext = (delayMs: number) => {
+    if (wrongTimerRef.current) { clearTimeout(wrongTimerRef.current); wrongTimerRef.current = null } // 防御：任何前进路径都清理错词计时器
     setTimeout(() => {
       if (currentIdx < queue.length - 1) {
         setCurrentIdx(prev => prev + 1)
@@ -265,6 +292,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
         setHintCount(0)
         setAutoPlayDone(false)
         setWrongReview(false)
+        setWrongEdited(false)
         advancingRef.current = false
         inputRef.current?.focus()
       } else {
@@ -647,15 +675,26 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
                     // 输入完成：显示对比
                     <div className="text-center">
                       <TypingDisplay target={currentWord.en} input={input} size="word" shakeLatestError />
-                      <div className={`mt-3 text-sm font-medium ${input === currentWord.en ? 'text-success' : 'text-destructive'}`}>
-                        {input === currentWord.en ? '✓ 正确！' : `✗ 正确答案：${currentWord.en}`}
+                      <div className={`mt-3 text-sm font-medium ${wrongReview ? 'text-destructive' : 'text-success'}`}>
+                        {wrongReview ? `✗ 正确答案：${currentWord.en}` : '✓ 正确！'}
                       </div>
                       {wrongReview && input !== currentWord.en && (
                         <div className="mt-2 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                          <span>按回车继续，或退格改对后自动前进</span>
+                          <span>{wrongEdited ? '已取消自动跳转 · 改对后自动前进，或回车继续' : '5 秒后自动继续 · 回车立即继续 · 退格改对后前进'}</span>
                           <button
-                            onClick={() => { advancingRef.current = true; goNext(0) }}
+                            onClick={() => { if (wrongTimerRef.current) { clearTimeout(wrongTimerRef.current); wrongTimerRef.current = null } advancingRef.current = true; goNext(0) }}
                             className="px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                          >
+                            继续 →
+                          </button>
+                        </div>
+                      )}
+                      {isNewWord && !wrongReview && (
+                        <div className="mt-3 flex items-center justify-center gap-2">
+                          <span className="text-xs text-muted-foreground">已记住，阅读下方短语/例句后继续</span>
+                          <button
+                            onClick={() => goNext(0)}
+                            className="px-3 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm"
                           >
                             继续 →
                           </button>
@@ -719,9 +758,19 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
                   value={input}
                   onChange={handleInput}
                   onKeyDown={(e) => {
+                    if ((e.key === 'Backspace' || e.key === 'Delete') && wrongReview && !wrongEdited) {
+                      // 学生开始纠错（退格修改）：取消 5 秒自动跳转，改由学生手动继续/改对后前进
+                      if (wrongTimerRef.current) { clearTimeout(wrongTimerRef.current); wrongTimerRef.current = null }
+                      setWrongEdited(true)
+                    }
                     if (e.key === 'Enter' && wrongReview) {
                       e.preventDefault()
+                      if (wrongTimerRef.current) { clearTimeout(wrongTimerRef.current); wrongTimerRef.current = null }
                       advancingRef.current = true
+                      goNext(0)
+                    } else if (e.key === 'Enter' && isNewWord && !wrongReview && input.length >= currentWord.en.length) {
+                      // 新词输入完成后已锁定：回车手动前进，给学生充分时间阅读短语/例句
+                      e.preventDefault()
                       goNext(0)
                     }
                   }}
@@ -730,6 +779,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
                   autoCorrect="off"
                   autoCapitalize="off"
                   spellCheck={false}
+                  readOnly={isNewWord && !wrongReview && input.length >= currentWord.en.length}
                   className={`w-full px-4 py-2 rounded-lg border border-transparent bg-transparent text-lg font-mono text-center caret-primary focus:outline-none focus:ring-1 focus:ring-primary/15 transition-shadow ${
                     inputError ? 'text-destructive' : ''
                   }`}
@@ -737,8 +787,47 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
                   disabled={loading}
                 />
 
-                {/* 完成后面板：例句/短语/近义词/相关词（输对时展示） */}
-                {input === currentWord.en && (currentWord.examples?.length || currentWord.phrases?.length || currentWord.synonyms?.length || currentWord.related?.length) ? (
+                {/* 学习区：新词全程直接展示短语/例句/同义词（无需等输入完成，读完手动前进） */}
+                {isNewWord && (currentWord.examples?.length || currentWord.phrases?.length || currentWord.synonyms?.length || currentWord.related?.length) && (
+                  <div className="mt-4 space-y-3 rounded-lg bg-secondary/20 p-3">
+                    {currentWord.examples && currentWord.examples.length > 0 && (
+                      <div>
+                        <div className="text-xs font-semibold text-muted-foreground mb-1.5">例句</div>
+                        <div className="space-y-1.5">
+                          {currentWord.examples.slice(0, 2).map((ex, i) => (
+                            <div key={i} className="text-sm">
+                              <span className="text-muted-foreground font-mono">{ex.en}</span>
+                              {ex.cn && <span className="text-xs text-muted-foreground/70 ml-2">{ex.cn}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {currentWord.phrases && currentWord.phrases.length > 0 && (
+                      <div>
+                        <div className="text-xs font-semibold text-muted-foreground mb-1.5">短语</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {currentWord.phrases.slice(0, 3).map((p, i) => (
+                            <Badge key={i} variant="outline" className="text-xs">
+                              {p.phrase}{p.cn ? `：${p.cn}` : ''}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(currentWord.synonyms?.length || currentWord.related?.length) && (
+                      <div className="text-xs">
+                        <span className="font-semibold text-muted-foreground">同</span>
+                        <span className="text-muted-foreground ml-2">
+                          {[...(currentWord.synonyms || []), ...(currentWord.related || [])].slice(0, 6).map(s => s.word).join(' / ')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 完成后面板：例句/短语/近义词/相关词（复习词答对时展示） */}
+                {!isNewWord && input === currentWord.en && (currentWord.examples?.length || currentWord.phrases?.length || currentWord.synonyms?.length || currentWord.related?.length) ? (
                   <div className="mt-4 space-y-3">
                     {currentWord.examples && currentWord.examples.length > 0 && (
                       <div>
