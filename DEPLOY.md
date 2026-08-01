@@ -21,13 +21,18 @@ docker-compose up -d --build
 
 ### 2. 初始化数据库
 
-首次部署需要执行数据初始化（导入6890词+450句+75阅读+115课文+95听力等）：
+**推荐方式：直接使用已初始化的数据库文件**（含全部教学数据与账号：7,572 词 / 450 句 / 75 阅读 / 95 听力 / 语法 / 短语）：
 
 ```bash
-# 进入容器执行初始化
-docker exec -it typing-practice bun run scripts/seed.ts
-docker exec -it typing-practice bun run scripts/seed-chinese.ts
-docker exec -it typing-practice bun run scripts/seed-chinese-full.ts
+# 将开发机/备份的 custom.db 放入数据卷目录（docker-compose 挂载 ./db → /app/db）
+mkdir -p db && cp <备份> db/custom.db
+```
+
+**空库初始化**（仅词典数据可脚本导入，句子/阅读/听力数据需从备份库恢复）：
+
+```bash
+# 进入容器导入词典数据（47 书 / 7,572 词 / 例句 / 短语 / 近义词 / 相关词）
+docker exec -it typing-practice bun scripts/import-vocab.ts
 
 # 预热听力文章 TTS 缓存（可选但推荐，避免首次播放合成等待）
 docker exec -it typing-practice bun run scripts/prewarm-listening-tts.ts
@@ -130,18 +135,22 @@ docker exec -it typing-practice curl -s http://localhost:3000
 
 ### Q: 数据库初始化失败？
 ```bash
-# 确认upload目录有Excel文件
-ls -la upload/
+# 确认 dict/output/vocab.db 词典源库存在
+ls -la dict/output/vocab.db
 
-# 手动执行
-docker exec -it typing-practice bun run scripts/seed.ts
+# 手动执行词典导入
+docker exec -it typing-practice bun scripts/import-vocab.ts
 ```
 
 ### Q: 如何清除用户数据（保留教学数据）？
 登录系统 → 设置中心 → 数据管理 → 清除个人数据
 
 ### Q: 如何修改固定账号？
-编辑 `scripts/seed.ts` 中的 `FIXED_USERS` 数组，重新执行 `bun run scripts/seed.ts`。
+直接 SQL 更新数据库 `User` 表（容器内）：
+
+```bash
+docker exec -it typing-practice sqlite3 /app/db/custom.db "UPDATE User SET name='新名字' WHERE id='cmrc3o8si0000utayfz8umxtt';"
+```
 
 ## 八、系统要求
 

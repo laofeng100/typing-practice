@@ -13,6 +13,16 @@
 
 ---
 
+### T-2 ✅ FSRS 调度全面修复（learning_steps 卡死 / 库存 R / 错题本门槛 / 积压计数 / 评级阈值）
+> 已修复（2026-07-28，`d4015a2`），并有全自动测试体系持续守护：vitest 单元 + 90 天模拟 6 项硬指标（`npm run test:all`）。
+- **learning_steps 首学卡死**：ts-fsrs 默认 `["1m","10m"]` 让首学卡停留 Learning 状态分钟级排期，永远无法进入 Review → 置空 `learning_steps: []`，首学 Hard 直进 Review（state=2）按天调度
+- **遗忘后无法及时复学**：`relearning_steps: []` 时 Again 后按崩落 S 排期，大 S 卡要数天才能复考 → 恢复 `['10m']` 重学窗口，Again 后 10 分钟可当天复学，跨天复习步进走完自动转 Review
+- **库存 R**：retrievability 恒 1.0 且永不刷新 → 改为实时计算（错题本/专项/古诗词队列按 liveR 升序排序）
+- **错题本收录门槛**：难度门槛已移除，改为 lapses≥1 或 totalErrors≥2；首学 Hard 单次错误不收录
+- **积压计数**：复习积压时新词停发逻辑修复；**评级阈值矩阵**：acc<60%→Again、<80%→Hard、score≥0.92→Easy、≥0.72→Good
+
+---
+
 ## FSRS V6 闭环评估
 
 闭环主链路**完整**：建卡（session/route.ts:141-154）→ `schedule()` 调度（fsrs.ts:148）→ 到期取卡（word/route.ts:29-38，`state>0 & due<=now`）→ 前端回传 cardState → 自动评级 `rateTyping()` → 更新卡片 + 写 FsrsReview 日志。新卡首评后 state>0，可正确再入复习队列。

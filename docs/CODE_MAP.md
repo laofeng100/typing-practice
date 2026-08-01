@@ -53,30 +53,34 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 
 ---
 
-## 1. 数据模型 `prisma/schema.prisma` (358 行)
+## 1. 数据模型 `prisma/schema.prisma` (21 个模型)
 
 | 表 | 关键字段 | 备注 |
 |---|---|---|
-| `User` | phone (unique) / role / stage / grade | 2 个固定账号，由 `seed.ts` 创建 |
-| `Word` | en / zh / pos / stage / difficulty | 6,890 词（小学1062+初中2317+高中3511） |
-| `GrammarPattern` | name / pattern / explainZh / examples | 215 句式 |
-| `GrammarSystem` | category / title / content | 94 体系条目 |
-| `Sentence` | en / zh / grammarPoint / stage / sourcePatternId | 450 句 |
-| `ReadingArticle` | stage / title / content / contentZh / questions (JSON) / vocabulary / grammarPoints | 75 篇 |
-| `ChineseText` | stage / title / author / dynasty / category / content / annotation / translation | 115 篇古诗文 |
-| `ListeningArticle` | stage / title / category (6 类) / wordCount / difficulty / content / questions | 95 篇 |
-| `FsrsCard` | cardType+cardId (unique) / state / stability / difficulty / due / lapses / reps / lastReview / retrievability / totalErrors | 学习卡核心，6 种 cardType |
-| `FsrsReview` | cardId / rating (1-4) / responseMs / accuracy / errorCount | 复习日志 |
-| `TypingSession` | module / subModule / durationMs / score / stars / metadata | 一次练习 |
-| `TypingRecord` | sessionId / cardType / cardId / targetText / inputText / errorKeysList (JSON) / rating | 单卡记录 |
-| `UserProgress` | userId+module+level (unique) / passed / stars / passWpm / passAccuracy | 关卡进度 |
+| `User` | phone (unique) / role / stage / grade / bookId | 2 个固定账号（弟弟/姐姐） |
+| `Book` | id=book_id / version / stage / grade / term / wordCount | 47 本小初高词书（v2 词典升级） |
+| `BookWord` | bookId+wordId (unique) / wordRank | 词↔书关联 + 教材内词序（FSRS 新词供给顺序） |
+| `WordDict` | id=head_word / en / zh / pos / usPhone / ukPhone / memoryMethod / isPrimary~isGaokao / bookCount | 7,572 词（有道词典，跨学段去重） |
+| `WordExample` | wordId / en / cn / ord | 例句（每词 3 条，16,339） |
+| `WordPhrase` | wordId / phrase / cn / ord | 全量短语（42,752） |
+| `WordSynonym` | wordId / pos / word / tranCn / ord | 近义词（22,313） |
+| `WordRelated` | wordId / pos / word / tranCn / ord | 相关词（15,957） |
+| `GrammarPattern` | stage / grade / term / category / name / structure / example | 语法句式（121） |
+| `GrammarSystem` | majorCat / itemName / content | 语法体系（94） |
+| `Sentence` | stage / order / en / zh / grammarPoint / grammarExplain / sourcePatternId | 450 句 |
+| `ReadingArticle` | stage / order / title / content / contentZh / questions (JSON) / vocabulary / grammarPoints | 75 篇 |
+| `ListeningArticle` | stage / order / title / category (6 类) / wordCount / difficulty / content / questions | 95 篇 |
+| `FsrsCard` | userId+cardType+cardId (unique) / state / stability / difficulty / due / lapses / reps / lastReview / retrievability / totalErrors / totalTyping | 学习卡核心，**cardType 仅 word/sentence**（FSRS_CARD_TYPES 白名单） |
+| `FsrsReview` | userId+cardType+cardId / rating (1-4) / responseMs / accuracy / errorCount | 复习日志 |
+| `TypingSession` | module / subModule / durationMs / score / stars / status / endedAt | 一次练习 |
+| `TypingRecord` | sessionId / cardType / cardId / targetText / inputText / errorKeysList (JSON) / rating / isCorrect | 单卡记录 |
+| `UserProgress` | userId+module+level (unique) / status / bestWpm / bestAccuracy / stars / attempts | 关卡进度 |
 | `Assessment` | userId / type / score / details | 评估 |
-| `DailyStat` | date (YYYY-MM-DD) + userId (unique) / keyboardMs / wordNew / wordReview / wordCorrect / sentenceDone / articleDone / chineseDone / listeningDone / avgWpm / avgAccuracy | 每日聚合 |
+| `DailyStat` | date (YYYY-MM-DD)+userId (unique) / totalMs / totalKeys / correctKeys / keyboardMs / wordNew / wordReview / wordCorrect / sentenceDone / articleDone / listeningDone / avgWpm / avgAccuracy | 每日聚合 |
 | `UserSetting` | userId+key (unique) / value | 设置 KV |
 
-- 所有 `userId` 字段均 `onDelete: Cascade`
-- 索引：`FsrsCard(cardType,cardId)`、`FsrsCard.due`、`FsrsCard.state`、`Word(stage)`、`DailyStat(userId,date)`
-- `LISTEN` ID 在 `UserProgress`/`DailyStat`/`UserSetting`/`FsrsCard` 等多表均存在
+- 所有 `userId` 字段均 `onDelete: Cascade`；`WordDict.id` 为 head_word 小写，FSRS 卡 `cardId` 直接存 head_word
+- 古诗词模块（ChineseText/chinese API/组件）已于 v2 阶段5 **全链路删除**，schema 无对应表，勿恢复
 
 ---
 
@@ -112,7 +116,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
   - `getSettings(userId)`: 调 `getRawSettings` → 若 `examCramMode=true` 临时放大 `wordBatchSize × (1 + intensity/100 × 2)` 等（**不持久化**，每次请求现算）
   - `setSetting(userId, key, value)`: upsert 单项
   - `getOrCreateDailyStat(userId, dateStr?)`: 当日统计 upsert（date 用 `localDateStr()`）
-  - `checkDailyLimit(userId)`: 累加 `keyboardMs+wordNew×2s+sentenceDone×3s+articleDone×10s+chineseDone×15s+listeningDone×5s` 与 `dailyLimitMin×60000ms` 对比
+  - `checkDailyLimit(userId)`: `usedMin = floor(totalMs / 60000)` 与 `dailyLimitMin×60000ms` 对比（不再按模块加权）
 
 ### 2.4 `lib/fsrs.ts` (204)
 - **导出**：`DEFAULT_PARAMS`、`getFsrs`、`FsrsCardState` (interface)、`RatingType`、`StateType`、`createNewCard`、`calculateRetrievability`、`schedule`、`rateTyping`、`getDueCards`、`getRetentionRate`、`Rating`、`State` (re-export from ts-fsrs)
@@ -190,7 +194,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
   3. 教研降权：`cardState=0`（新卡）rating 封顶 Hard(≤2)；`hintCount>0` 同理
   4. 考前突击：`retention=0.95`
   5. `updateFsrsCard(record, retention, maxInterval)`: 事务内 读 → `schedule` → upsert FsrsCard → insert FsrsReview
-  6. `updateDailyStat(module, fields)`: 按 module 分发 — `keyboard→keyboardMs` / `wordNew/wordReview/wordCorrect` / `sentenceDone` / `articleDone` / `chineseDone` / `listeningDone`；重算 `avgWpm=累加/总天数` / `avgAccuracy`
+  6. `updateDailyStat(module, fields)`: 按 module 分发 — `keyboard→keyboardMs` / `wordNew/wordReview/wordCorrect` / `sentenceDone` / `articleDone` / `listeningDone`；重算 `avgWpm` / `avgAccuracy`（注：DailyStat.chineseDone 字段保留但无写入路径）
   7. 键盘关卡模式：`upsertProgress(userId,module,level,passWpm,passAccuracy,passed,stars)`；通过则解锁 `level+1`（创建或激活）
   8. 前后对比 `computeAchievements`，diff 出新解锁返回
 - **校验**: rating 范围 1-4（非法回退自动评级）
@@ -221,19 +225,18 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 ### 3.8 `api/article/route.ts` (52)
 - **GET**: 阅读文章列表 — join `fsrsCard` 标记 `practiced`(是否做过) / `reps`(次数)
 
-### 3.9 `api/chinese/route.ts` (48)
-- **GET**: 中文课文列表 — 按 stage 过滤 + join `fsrsCard` 标记 practiced
+### 3.9 ~~api/chinese/route.ts~~（v2 阶段5 已全链路删除，勿恢复）
 
 ### 3.10 `api/dashboard/route.ts` (96)
 - **GET**: 仪表盘聚合
-- **字段**: `user / settings / todayStat / keyboardProgress / keyboardUnlocked / advancedUnlocked / bestWpm / bestAccuracy / dueCards / newCards / wordProgress / recentSessions / streak / chineseProgress / sentenceProgress / articleProgress / listeningProgress`
+- **字段**: `user / settings / todayStat / keyboardProgress / keyboardUnlocked / advancedUnlocked / bestWpm / bestAccuracy / dueCards / newCards / wordProgress / recentSessions / streak / sentenceProgress / articleProgress / listeningProgress`
 - **解锁判定**: `keyboardUnlocked = 6关全 completed` 或 `bestWpm ≥ wpmUnlockThreshold && bestAccuracy ≥ accuracyUnlockThreshold`
 - **streak**: 今天未练不算断签（cursor 退 1 天开始）
 
 ### 3.11 `api/mistakes/route.ts` (84)
 - **GET**: 错题本
 - **筛选**: `OR: difficulty≥5 || lapses≥1 || totalErrors≥2`
-- **分组**: `grouped{word/sentence/article/chinese/listening}` + `stats`（每类总数/总错误数）
+- **分组**: `grouped{word/sentence}` + `stats`（每类总数/总错误数）
 - **批量 join**: 用 `id IN [...]` 一次性取资源数据
 
 ### 3.12 `api/progress/route.ts` (33)
@@ -250,7 +253,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 - **POST**: 清除当前用户数据
 - **删除范围**（事务内 deleteMany）: `FsrsCard / FsrsReview / TypingSession / TypingRecord / UserProgress / Assessment / DailyStat / UserSetting`
 - **重置**: `user.update({stage:'小学',grade:1})`
-- **返回**: `{deleted: {...counts}, kept: {word/grammarPattern/grammarSystem/sentence/readingArticle/chineseText}}`（教学数据保留）
+- **返回**: `{success, deleted: {...counts 8 类业务表}, preserved}`（preserved = 家长管控键保留；教学数据表本身不删）
 
 ### 3.15 `api/settings/route.ts` (80) ⭐核心
 - **GET**: 返回 `{settings, effectiveSettings}`（含 `parentPin` 掩码 `••••`、`ttsToken` 掩码 `••••••••`）
@@ -324,13 +327,13 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 - **流程**: `fetch('/api/users')` → `localStorage.last_login_uid` 排序置顶 → `POST /api/auth {userId}` → 写入 last_login_uid → `onLoggedIn(user)`
 - **UI**: 头像（boy→👦/girl→👧）+ 名字 + 学段 + "上次登录" 徽章 + ArrowRight + 三大功能卡（键盘/单词/阅读）
 
-### 4.6 `components/app/app-shell.tsx` (351) ⭐核心
+### 4.6 `components/app/app-shell.tsx` (350) ⭐核心
 - **职责**: 登录后主框架（路由 + 侧栏导航 + 顶栏 + 移动端底部 Tab）
-- **状态**: `view: 13 种`、`dashData`、`mobileOpen`、`focusedInit`
+- **状态**: `view: 13 种`（12 case + default）、`dashData`、`mobileOpen`、`focusedInit`
 - **常量**:
-  - `NAV_ITEMS`: 12 项分 6 组（主要/打字基础/英语/中文/学习统计/系统）
-  - `MOBILE_TABS`: 5 个底部固定 Tab
-  - `MODULE_GROUPS`: 6 个组配置
+  - `NAV_ITEMS`: 12 项分 5 组（主要/打字基础/英语练习/学习统计/系统）
+  - `MOBILE_TABS`: 5 个底部固定 Tab（概览/键盘/单词/句子/我的）
+  - `MODULE_GROUPS`: 5 个组配置
 - **`NavList` 子组件**: 按组渲染，侧栏 Tooltip 显示锁定原因
 - **锁定**: `item.module && item.module !== 'keyboard' && !advancedUnlocked` → 禁用 + Tooltip
 - **`loadDashboard()`**: 拉 `/api/dashboard`；401 自动登出（其它错误只 toast）
@@ -341,7 +344,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 
 ### 4.7 `components/app/dashboard.tsx` (371) ⭐核心
 - **职责**: 仪表盘（今日任务卡 + 4 统计卡 + 学习路径 + 键盘关卡 + 7 天趋势柱状图）
-- **常量**: `ENCOURAGEMENTS`（5 句鼓励语，按年内日序轮换）/ `pathNodes`（6 节点：keyboard→word→sentence→reading→listening→chinese）
+- **常量**: `ENCOURAGEMENTS`（5 句鼓励语，按年内日序轮换）/ `pathNodes`（5 节点：keyboard→word→sentence→reading→listening）
 - **`timeGreeting()`**: 早/午/晚问候
 - **`primaryAction`**: 自动决策 — 键盘未通关→键盘 / 有 dueCards→单词复习 / 否则→单词新学
 - **组件**: `StatCard` / `TrendTooltip` 内部
@@ -427,16 +430,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 - **答题**: FSRS rating 同 reading（按正确率映射）
 - **强制**: 必须先播放（`playedOnce`）才能提交
 
-### 5.6 `chinese-module.tsx` (418)
-- **状态机**: `list → practice → result`
-- **列表**: 朝代·作者 + 类别徽章（古诗词/文言文/现代诗文）+ 字数
-- **打字**: `textarea`（多行）+ TypingDisplay 对比
-- **竖排切换**: `writing-mode: vertical-rl` + `overflow-x-auto`
-- **注释/译文**: 折叠面板（`current.annotation` / `current.translation`）
-- **TTS**: 朗读 标题+作者+正文拼接
-- **阈值**: 完成 ≥ 95% 内容
-- **准确率防刷**: 分母用 `targetArr.length`（未输入算错）
-- **errorKeys**: 记**目标字**（不是输入字），便于错字分析
+### 5.6 ~~chinese-module.tsx~~（v2 阶段5 已全链路删除，勿恢复）
 
 ### 5.7 `focused-practice.tsx` (465)
 - **三入口**: keys/words/sentences → `/api/practice/focused?type=...`
@@ -448,7 +442,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 ### 5.8 `achievements.tsx` (253)
 - **导出**: `Achievements`、`AchievementGrid`（内部）
 - **快照对比**: `localStorage.ach_unlocked` vs 当前 → diff 新解锁 → toast 庆祝
-- **7 Tab**: 全部/打卡/键盘/单词/句子/阅读/中文/时长
+- **7 Tab**: 全部/打卡/键盘/单词/句子/阅读/时长
 - **4 档 tier**: amber/sky/purple/rose + 灰度锁定
 - **词汇曲线**: 内嵌 SVG 面积+折线
 - **hover**: progress/target 覆盖层
@@ -464,7 +458,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 
 ### 5.10 `mistake-book.tsx` (224)
 - **导出**: `MistakeBook`、`MistakeList`（内部）
-- **5 Tab**: word/sentence/article/listening/chinese
+- **4 Tab**: word/sentence/article/listening
 - **每条**: 难度色带 + 错误率 + 复习次数 + "立即攻克" 按钮（callback `onPractice(type,id)` → app-shell 跳转 focused-practice）
 
 ### 5.11 `study-report.tsx` (385)
@@ -549,7 +543,7 @@ shadcn New York 风格通用组件，纯样板，本文不展开。
 - 通用文案，不回显 `e.message`（避免泄露实现细节）
 
 ### 8.5 教学数据
-- 页面零硬编码，全部入库（6,890 词 / 450 句 / 75 阅读 / 95 听力 / 115 课文 / 215 句式 / 94 体系）
+- 页面零硬编码，全部入库（7,572 词 / 42,752 短语 / 450 句 / 75 阅读 / 95 听力 / 121 句式 / 94 体系 + 近义/相关词）
 
 ### 8.6 教研降权（session/route.ts）
 - `cardState=0`（新卡）rating 封顶 Hard（≤2）
@@ -559,7 +553,7 @@ shadcn New York 风格通用组件，纯样板，本文不展开。
 ### 8.7 wrongReview 模式（所有打字模块）
 - 打错不立即前进，避免错误态污染 FSRS 调度
 - 用户改对或回车/"继续 →" 才前进
-- 阈值：word 80%、sentence 85%、chinese 95%
+- 阈值：word 80%（UI 判对，word-module.tsx:238）、sentence 85%
 
 ### 8.8 锁定/解锁
 - `keyboard` 模块始终可访问
@@ -603,4 +597,26 @@ shadcn New York 风格通用组件，纯样板，本文不展开。
 - **新增学习模块**: lib/types + api/*/route.ts + practice/*-module.tsx + app-shell 渲染（4 处）
 - **新增成就**: lib/achievements.ts computeAchievements + UI（已支持 27 个模板）
 - **新增听力文章**: 写入 DB 后 `bun run scripts/prewarm-listening-tts.ts` 预热 TTS 缓存
-- **回归测试**: `DATABASE_URL="file:/tmp/opencode/typtest/test.db" bun run dev &` → `bun scripts/test-seed-batch1.ts && bun scripts/test-batch1.ts`
+- **全链路回归**: `npm run test:all`（详见 §9，取代旧 test-batch* 手动回归）
+
+---
+
+## 9. 自动化测试体系
+
+> 全自动全链路测试，正式库 `custom.db` 零接触。编排入口 `scripts/test/run-all.sh`，一键命令 `npm run test:all`。
+
+### 9.1 三层隔离
+1. **独立测试库** `prisma/db/e2e.db`：`scripts/test/setup-e2e.ts` 只读复制正式库基础表（WordDict/Book/BookWord/WordPhrase/WordExample/WordSynonym/WordRelated/Sentence/GrammarPattern/GrammarSystem/ReadingArticle/ListeningArticle/User），清空业务表（TypingRecord/TypingSession/FsrsCard/FsrsReview/DailyStat/UserProgress/UserSetting/Assessment），插入固定测试账号 e2e-didi/e2e-jiejie
+2. **独立服务**：`PORT=3100` + `DATABASE_URL=file:./db/e2e.db` + `E2E=1`（next.config.ts 据此用 `.next-e2e` 构建目录，规避 `.next/dev` 锁互斥）
+3. **正式库保护**：setup-e2e 对 custom.db 仅只读（WAL checkpoint + copyFileSync）；路径防呆仅允许 `custom.db → e2e.db`；业务表清空后硬校验必须为 0
+
+### 9.2 测试文件
+- `tests/e2e/01~10-*.spec.ts`：Playwright 流程测试，**数字前缀强制执行顺序**（文件名序），workers=1 串行（SQLite 写串行）；global-setup 用 e2e-didi 登录存 storageState；helpers.ts 提供 sqlite 直查（query/exec 带 busy retry）与 ensureAdvancedUnlocked（直写键盘进度解锁高级模块）
+- `tests/fsrs/fsrs-unit.test.ts`：vitest 单元测试（rateTyping 阈值矩阵 / 首学 Hard 直进 Review / learning_steps 无卡死 / R 存储）
+- `scripts/test/fsrs-simulate.mjs`：90 天模拟（真实 API 提交 + due 快进），6 项硬指标 a-f 全 PASS 才算过
+
+### 9.3 常见坑（测试维护时注意）
+- Prisma SQLite DateTime 存 integer 毫秒；exec 直写 due 必须用毫秒 number，ISO text 与 integer 比较恒不匹配 → 复习队列永远为空
+- `/api/dashboard` GET 也会 upsert 今日 DailyStat → 重置类断言必须限定 userId
+- 首学评级封顶 Hard（cardState=0 且非显式 rating）→ FsrsReview 首学也写流水，计数断言用 before+N
+- 新词 UI 队列排序依赖 wordRank，不稳定 → 数据构造类测试优先走 API 提交
