@@ -1,5 +1,9 @@
 node_modules/
 .next/
+.next-e2e/
+test-results/
+playwright-report/
+*.log
 *.db
 *.db-journal
 !dict/output/vocab.db

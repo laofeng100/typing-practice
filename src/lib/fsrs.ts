@@ -49,7 +49,10 @@ export function getFsrs(retention?: number, maxInterval?: number): FSRS {
       // ts-fsrs 默认 learning_steps=["1m","10m"] 会让首学卡停留在 Learning 状态并分钟级排期，
       // 与按天调度冲突导致卡片永远无法进入 Review（FSRS 记忆调度失效）
       learning_steps: [],
-      relearning_steps: [],
+      // 遗忘后保留 10 分钟重学窗口：Again 的卡 10 分钟后可当天复学（再练一组即复现），
+      // 跨天复习时步进走完自动转 Review 按天排期，不影响按天调度；
+      // 若置空则 Again 后直接按崩落 S 排期（大 S 卡要数天才能复考，违背遗忘应立即复学原则）
+      relearning_steps: ['10m'],
     }))
     fsrsCache.set(key, inst)
   }
