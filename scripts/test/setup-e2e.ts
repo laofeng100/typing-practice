@@ -16,7 +16,15 @@ const DB_DIR = fileURLToPath(new URL('../../prisma/db/', import.meta.url))
 const SRC = `${DB_DIR}custom.db`
 const DST = `${DB_DIR}e2e.db`
 
-// 业务表（测试数据）：清空；User 保留
+// 防呆校验（正式库保护，禁止改动）：
+// 1) 源/目标文件名必须精确匹配，防止误改路径后把清空操作指向正式库或其他库
+// 2) 源与目标必须不同，防止原地清空正式库
+if (!SRC.endsWith('custom.db') || !DST.endsWith('e2e.db') || SRC === DST) {
+  console.error(`[setup-e2e] 路径校验失败，拒绝执行（仅允许 custom.db → e2e.db）: ${SRC} → ${DST}`)
+  process.exit(1)
+}
+
+// 业务表（测试数据）：仅对 e2e.db 清空；User 保留。正式库 custom.db 零接触（只读复制）
 const BUSINESS_TABLES = [
   'TypingRecord',
   'TypingSession',
@@ -63,6 +71,12 @@ db.exec('PRAGMA foreign_keys = ON;')
 
 const count = (t: string): number => (db.prepare(`SELECT COUNT(*) AS c FROM "${t}"`).get() as { c: number }).c
 const biz = BUSINESS_TABLES.map(t => `${t}=${count(t)}`).join(' ')
+// 硬校验：业务表必须全部清空，残留会让测试断言失真（如错题本/复习队列基线）
+const dirty = BUSINESS_TABLES.filter(t => count(t) > 0)
+if (dirty.length > 0) {
+  console.error(`[setup-e2e] 业务表清空失败，残留: ${dirty.join(',')}`)
+  process.exit(1)
+}
 const base = ['WordDict', 'Book', 'BookWord', 'WordPhrase', 'Sentence', 'User']
   .map(t => `${t}=${count(t)}`).join(' ')
 console.log(`[setup-e2e] 业务表已清空: ${biz}`)
