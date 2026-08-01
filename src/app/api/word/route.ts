@@ -13,7 +13,7 @@ const STAGE_LABEL: Record<string, string> = { primary: '小学', middle: '初中
 const wordDetailSelect = {
   id: true, en: true, zh: true, pos: true, usPhone: true, ukPhone: true, memoryMethod: true,
   examples: { take: 3, orderBy: { ord: 'asc' as const }, select: { en: true, cn: true } },
-  phrases: { take: 5, orderBy: { ord: 'asc' as const }, select: { phrase: true, cn: true } },
+  phrases: { take: 8, orderBy: { ord: 'asc' as const }, select: { phrase: true, cn: true } },
   synonyms: { select: { pos: true, word: true, tranCn: true } },
   related: { select: { pos: true, word: true, tranCn: true } },
 }

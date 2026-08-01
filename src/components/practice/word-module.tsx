@@ -807,7 +807,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
                       <div>
                         <div className="text-xs font-semibold text-muted-foreground mb-1.5">短语</div>
                         <div className="flex flex-wrap gap-1.5">
-                          {currentWord.phrases.slice(0, 3).map((p, i) => (
+                          {currentWord.phrases.slice(0, 5).map((p, i) => (
                             <Badge key={i} variant="outline" className="text-xs">
                               {p.phrase}{p.cn ? `：${p.cn}` : ''}
                             </Badge>
@@ -846,7 +846,7 @@ export default function WordModule({ user, settings, onProgress, advancedUnlocke
                       <div>
                         <div className="text-xs font-semibold text-muted-foreground mb-1.5">短语</div>
                         <div className="flex flex-wrap gap-1.5">
-                          {currentWord.phrases.slice(0, 3).map((p, i) => (
+                          {currentWord.phrases.slice(0, 5).map((p, i) => (
                             <Badge key={i} variant="outline" className="text-xs">
                               {p.phrase}{p.cn ? `：${p.cn}` : ''}
                             </Badge>

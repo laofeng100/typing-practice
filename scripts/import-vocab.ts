@@ -7,7 +7,7 @@
  * - Book（47 本小初高词书）
  * - WordDict（7,572 去重词：音标/记忆法/学段标签/主释义）
  * - BookWord（词↔书关联 + 教材内词序）
- * - WordExample（每词 3 条）/ WordPhrase（每词 5 条）
+ * - WordExample（每词 3 条）/ WordPhrase（全量导入，同词多书去重后约 4.3 万条）
  * - WordSynonym / WordRelated（每词全量）
  * - 迁移存量学习数据：FsrsCard/TypingRecord 中 word 卡的 cardId 数字 → head_word
  */
@@ -132,14 +132,14 @@ async function main() {
   }
   console.log('WordExample:', exCount)
 
-  // ===== 5. 短语（每词 ord 前 5，同词多书按 phrase 去重） =====
+  // ===== 5. 短语（全量导入：同词多书按 phrase 去重，不设数量上限） =====
   const phRows = q<any>(`SELECT w.head_word, p.phrase, p.cn, p.ord FROM phrases p JOIN words w ON p.word_id=w.word_id WHERE p.phrase IS NOT NULL AND p.phrase != '' ORDER BY w.head_word, p.ord`)
   const phByWord = new Map<string, { phrase: string; cn: string; ord: number }[]>()
   for (const p of phRows) {
     if (!headSet.has(p.head_word)) continue
     let list = phByWord.get(p.head_word)
     if (!list) { list = []; phByWord.set(p.head_word, list) }
-    if (list.length < 5 && !list.some(x => x.phrase === p.phrase)) list.push({ phrase: p.phrase, cn: p.cn ?? '', ord: list.length })
+    if (!list.some(x => x.phrase === p.phrase)) list.push({ phrase: p.phrase, cn: p.cn ?? '', ord: list.length })
   }
   let phCount = 0
   for (const [wordId, list] of phByWord) {
