@@ -48,6 +48,16 @@
 
 ---
 
+### T-5 ✅ 深度测试 3 轮（健壮性 / 规模 / 稳定性）
+> 已补齐（2026-08-01）：E2E 12→14 流程，vitest 12→18 用例，验证：连续 3 遍 test:all 全绿。
+- **健壮性（13-robustness.spec.ts）**：非法 module 400 / records 超 200 与缺 targetText 400 / 非法 rating=99 回退自动评级（卡正常建、评级=2）/ 负数与 NaN 数值归零（不 500）/ 空 records 200 且会话落库 / Promise.all 并发双提交（SQLite WAL 并发安全，10 卡全落）/ 同卡重复提交幂等（reps+1 不重复建卡）
+- **规模（14-scale.spec.ts）**：3 批×100 提交建 300 卡（逼近 records 上限 200）→ 全部快进到期 → dueCount=基线+300 触发积压防护（新词停发、backlog=true）→ 队列按 wordReviewBatchSize 截断 20 张 → 20 张复习提交 due 全部延后 → 接口耗时 <5s 性能阈值
+- **vitest 边界值 6 用例**：rateTyping 极端输入（全错零速度 Again/50% 再快也 Again/全对零速度 Good/全对极快 Easy）、targetWpm 自定义基准方向（基准越低越易 Easy）、fsrsMaxInterval 默认 365 封顶
+- **稳定性**：`test:all` 连续 3 遍 PASS=4 FAIL=0（0 flaky）
+- **过程中定位修复的测试自身问题**：mode=new 只返回 10 词不足（改直查 WordDict 排除已学）；NOT IN 参数多传 USER 报 column index out of range（参数与占位符严格对齐）；dueCount 精确断言耦合前面流程到期卡（改相对基线）
+
+---
+
 ## FSRS V6 闭环评估
 
 闭环主链路**完整**：建卡（session/route.ts:141-154）→ `schedule()` 调度（fsrs.ts:148）→ 到期取卡（word/route.ts:29-38，`state>0 & due<=now`）→ 前端回传 cardState → 自动评级 `rateTyping()` → 更新卡片 + 写 FsrsReview 日志。新卡首评后 state>0，可正确再入复习队列。

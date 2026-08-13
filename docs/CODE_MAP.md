@@ -613,8 +613,8 @@ shadcn New York 风格通用组件，纯样板，本文不展开。
 3. **正式库保护**：setup-e2e 对 custom.db 仅只读（WAL checkpoint + copyFileSync）；路径防呆仅允许 `custom.db → e2e.db`；业务表清空后硬校验必须为 0
 
 ### 9.2 测试文件
-- `tests/e2e/01~12-*.spec.ts`：Playwright 流程测试，**数字前缀强制执行顺序**（文件名序），workers=1 串行（SQLite 写串行）；global-setup 用 e2e-didi 登录存 storageState；helpers.ts 提供 sqlite 直查（query/exec 带 busy retry）与 ensureAdvancedUnlocked（直写键盘进度解锁高级模块）。11/12 为 FSRS 盲区补齐：11 突击模式（提前 7 天窗口 + batch 放大 + 0.95 保留率分支）、12 细节路径（hint 封顶/零击键守卫/自定义保留率链路/liveR 升序断言）
-- `tests/fsrs/fsrs-unit.test.ts`：vitest 单元测试（rateTyping 阈值矩阵 / 首学 Hard 直进 Review / learning_steps 无卡死 / R 存储 / 突击保留率 0.95<0.9 / 自定义低保留率 0.8 间隔更长 / maxInterval=60 封顶）
+- `tests/e2e/01~14-*.spec.ts`：Playwright 流程测试，**数字前缀强制执行顺序**（文件名序），workers=1 串行（SQLite 写串行）；global-setup 用 e2e-didi 登录存 storageState；helpers.ts 提供 sqlite 直查（query/exec 带 busy retry）与 ensureAdvancedUnlocked（直写键盘进度解锁高级模块）。11/12 为 FSRS 盲区补齐（突击模式/细节路径）；13 健壮性（异常 payload/并发/幂等）；14 规模（300 卡积压停发/队列截断/性能阈值）
+- `tests/fsrs/fsrs-unit.test.ts`：vitest 单元测试 18 用例（rateTyping 阈值矩阵与边界值 / 首学 Hard 直进 Review / learning_steps 无卡死 / R 存储 / 突击保留率 0.95<0.9 / 自定义保留率方向 0.8>0.9 / maxInterval 60 与 365 封顶 / targetWpm 基准）
 - `scripts/test/fsrs-simulate.mjs`：90 天**内存模拟**（ts-fsrs 官方实现 + 项目同款参数与 schedule 封装，不调 API），6 项硬指标 a-f 全 PASS 才算过
 
 ### 9.3 常见坑（测试维护时注意）
@@ -622,6 +622,9 @@ shadcn New York 风格通用组件，纯样板，本文不展开。
 - `/api/dashboard` GET 也会 upsert 今日 DailyStat → 重置类断言必须限定 userId
 - 首学评级封顶 Hard（cardState=0 且非显式 rating）→ FsrsReview 首学也写流水，计数断言用 before+N
 - 新词 UI 队列排序依赖 wordRank，不稳定 → 数据构造类测试优先走 API 提交
+- **跨 spec 断言必须相对基线**（前面流程会留数据）：卡数/流水中数/到期数一律 before+N；快进 due 必须落在过去且限定自己的 cardId
+- **SQL 参数绑定数必须与 `?` 占位符严格一致**：`NOT IN (...)` 模板拼接后参数数组只含占位符对应的值（node:sqlite 多传/少传都报 column index out of range）
+- `GET /api/word?mode=new` 最多返回 wordBatchSize(10) 个词 → 大批量构造（如规模测试 300 卡）直接从 WordDict 查词，排除已学卡
 
 ### 9.4 构建红线（交付级）
 - `next.config.ts` 已移除 `ignoreBuildErrors`：`next build` 会做全量类型检查，与 `tsc --noEmit` 同门拦截类型错误

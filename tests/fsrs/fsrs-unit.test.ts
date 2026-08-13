@@ -151,3 +151,39 @@ describe('考前突击与自定义参数（盲区补齐）', () => {
     expect(lastGap).toBeGreaterThan(30) // 已增长到接近 cap（非调度卡死）
   })
 })
+
+describe('rateTyping 边界值（深度测试：极端输入不崩溃、方向正确）', () => {
+  it('全错零速度 → Again（遗忘）', () => {
+    expect(rateTyping(0, 0)).toBe(Rating.Again)
+  })
+
+  it('准确率 50% 打字再快也判遗忘（准确率是遗忘判定的唯一依据）', () => {
+    expect(rateTyping(0.5, 100, 0, 30)).toBe(Rating.Again)
+  })
+
+  it('全对但零速度 → Good（score=0.8，达到 Good 门槛但不升 Easy）', () => {
+    expect(rateTyping(1, 0, 0, 30)).toBe(Rating.Good)
+  })
+
+  it('全对极快 → Easy', () => {
+    expect(rateTyping(1, 100, 0, 30)).toBe(Rating.Easy)
+  })
+
+  it('targetWpm 自定义基准生效（基准越低越容易 Easy）', () => {
+    // 同 30wpm：基准 20 → 归一化 1.0 → Easy；基准 60 → 归一化 0.5 → score=0.9 → Good
+    expect(rateTyping(1, 30, 0, 20)).toBe(Rating.Easy)
+    expect(rateTyping(1, 30, 0, 60)).toBe(Rating.Good)
+  })
+
+  it('fsrsMaxInterval 默认 365 封顶（12 次 Good 不超 365.5 天）', () => {
+    const t0 = new Date('2026-08-01T10:00:00')
+    let card = schedule(createNewCard(), Rating.Good, 0, new Date(t0))
+    for (let i = 0; i < 12; i++) {
+      const t = new Date(card.due)
+      card = schedule(card, Rating.Good, 0, new Date(t))
+    }
+    const lastGap = (card.due.getTime() - card.lastReview!.getTime()) / 86400000
+    expect(lastGap).toBeLessThanOrEqual(365.5)
+    expect(lastGap).toBeGreaterThan(100) // 已充分增长（S 巨大）
+  })
+})

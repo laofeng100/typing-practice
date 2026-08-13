@@ -64,10 +64,10 @@ if [ "$MODE" = "all" ] || [ "$MODE" = "e2e" ]; then
   curl -sf -o /dev/null "http://localhost:$PORT/api/word?mode=mixed" || true
   sleep 2
 
-  # ---------- 5. Playwright 流程测试（12 个 spec 串行） ----------
-  echo "==> Playwright 流程测试（12 specs）"
+  # ---------- 5. Playwright 流程测试（14 个 spec 串行） ----------
+  echo "==> Playwright 流程测试（14 specs）"
   npx playwright test --reporter=list 2>&1 | tee "$LOG_DIR/playwright.out"
-  check "playwright E2E 12 个流程" "${PIPESTATUS[0]}"
+  check "playwright E2E 14 个流程" "${PIPESTATUS[0]}"
 fi
 
 if [ "$MODE" = "all" ] || [ "$MODE" = "fsrs" ]; then

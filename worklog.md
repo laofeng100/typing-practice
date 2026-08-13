@@ -36,7 +36,14 @@
 - vitest 新增：突击保留率 0.95 间隔 < 0.9、低保留率 0.8 间隔更长（FSRS 数学：retention 越低允许衰减越多）、maxInterval=60 封顶
 - 过程中两次自查修正测试设计：新卡场景无法隔离 hint 封顶（改用复习卡）；due=lastReview+24h 落在未来导致队列为空（改 +2h）
 
-**验证**：tsc 零错误；vitest 12/12 PASS；E2E 12/12 PASS（54.2s）；90 天模拟 allPass=true。
+**深度测试 3 轮**（E2E 12→14 流程，vitest 12→18 用例）：
+- **第 1 轮·稳定性**：`test:all` 连续 3 遍全绿（0 flaky）
+- **第 2 轮·健壮性**（`13-robustness.spec.ts`）：非法 module→400、records 超 200/缺 targetText→400、非法 rating=99 回退自动评级、负数/NaN 归零容错、空 records 仍建会话、Promise.all 并发双提交全成功（SQLite WAL）、同卡重复提交幂等（reps 累加不重复建卡）
+- **第 3 轮·规模**（`14-scale.spec.ts`）：3 批×100 提交建 300 卡 → 快进到期 → 积压防护触发（dueCount=基线+300，新词停发）→ 队列截断 20 张 → 复习提交 20 张 due 延后 → 性能阈值 <5s
+- vitest 新增 6 边界用例：全错零速度 Again/50% 准确率再快也 Again/全对零速度 Good（不升 Easy）/全对极快 Easy/targetWpm 基准方向/maxInterval=365 默认封顶
+- 测试设计教训（已写入 CODE_MAP §9.3）：跨 spec 相对基线、快进限定自己的卡、SQL 参数与占位符严格一致（NOT IN 多传 USER 报 column index out of range）、mode=new 上限 10 词不足时直查 WordDict
+
+**验证**：tsc 零错误；vitest 18/18 PASS；E2E 14/14 PASS（56.3s）；90 天模拟 allPass=true；3 连跑稳定。
 
 ---
 
