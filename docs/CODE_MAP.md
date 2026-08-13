@@ -613,8 +613,8 @@ shadcn New York 风格通用组件，纯样板，本文不展开。
 3. **正式库保护**：setup-e2e 对 custom.db 仅只读（WAL checkpoint + copyFileSync）；路径防呆仅允许 `custom.db → e2e.db`；业务表清空后硬校验必须为 0
 
 ### 9.2 测试文件
-- `tests/e2e/01~10-*.spec.ts`：Playwright 流程测试，**数字前缀强制执行顺序**（文件名序），workers=1 串行（SQLite 写串行）；global-setup 用 e2e-didi 登录存 storageState；helpers.ts 提供 sqlite 直查（query/exec 带 busy retry）与 ensureAdvancedUnlocked（直写键盘进度解锁高级模块）
-- `tests/fsrs/fsrs-unit.test.ts`：vitest 单元测试（rateTyping 阈值矩阵 / 首学 Hard 直进 Review / learning_steps 无卡死 / R 存储）
+- `tests/e2e/01~12-*.spec.ts`：Playwright 流程测试，**数字前缀强制执行顺序**（文件名序），workers=1 串行（SQLite 写串行）；global-setup 用 e2e-didi 登录存 storageState；helpers.ts 提供 sqlite 直查（query/exec 带 busy retry）与 ensureAdvancedUnlocked（直写键盘进度解锁高级模块）。11/12 为 FSRS 盲区补齐：11 突击模式（提前 7 天窗口 + batch 放大 + 0.95 保留率分支）、12 细节路径（hint 封顶/零击键守卫/自定义保留率链路/liveR 升序断言）
+- `tests/fsrs/fsrs-unit.test.ts`：vitest 单元测试（rateTyping 阈值矩阵 / 首学 Hard 直进 Review / learning_steps 无卡死 / R 存储 / 突击保留率 0.95<0.9 / 自定义低保留率 0.8 间隔更长 / maxInterval=60 封顶）
 - `scripts/test/fsrs-simulate.mjs`：90 天**内存模拟**（ts-fsrs 官方实现 + 项目同款参数与 schedule 封装，不调 API），6 项硬指标 a-f 全 PASS 才算过
 
 ### 9.3 常见坑（测试维护时注意）

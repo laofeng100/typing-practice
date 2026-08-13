@@ -30,7 +30,13 @@
 - DEPLOY.md 全面重写：在线热备份（`.backup` 替代裸 cp）、空库初始化全流程、容器内 db:push 全路径命令（镜像无 node_modules/.bin）、升级回滚、PIN 丢失处置
 - .env.example 补 SESSION_SECRET 说明
 
-**验证**：tsc 零错误；vitest 9/9 PASS；E2E 10/10 PASS（1.0m）；90 天模拟 allPass=true。
+**FSRS 测试盲区补齐**（E2E 10→12 流程，vitest 9→12 用例）：
+- `11-exam-cram.spec.ts`：突击模式全链路（提前 7 天窗口拉到未来卡 / wordBatchSize 放大 / retention=0.95 提交分支 / 设置恢复）
+- `12-fsrs-details.spec.ts`：hintCount 封顶（对照验证 rating 2 vs 4）/ 零击键守卫负向（卡数·due·流水均不变）/ 自定义 fsrsRetention 保存→生效链路 / 复习队列按实时 R 非降序断言
+- vitest 新增：突击保留率 0.95 间隔 < 0.9、低保留率 0.8 间隔更长（FSRS 数学：retention 越低允许衰减越多）、maxInterval=60 封顶
+- 过程中两次自查修正测试设计：新卡场景无法隔离 hint 封顶（改用复习卡）；due=lastReview+24h 落在未来导致队列为空（改 +2h）
+
+**验证**：tsc 零错误；vitest 12/12 PASS；E2E 12/12 PASS（54.2s）；90 天模拟 allPass=true。
 
 ---
 

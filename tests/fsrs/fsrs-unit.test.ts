@@ -112,3 +112,42 @@ describe('R 存储：复习前旧卡实时可提取性', () => {
     expect(card.retrievability).toBeLessThan(1)
   })
 })
+
+describe('考前突击与自定义参数（盲区补齐）', () => {
+  it('突击保留率 0.95 的间隔短于默认 0.9（压实现期记忆）', () => {
+    const t0 = new Date('2026-08-01T10:00:00')
+    const base = createNewCard()
+    const g90 = schedule(base, Rating.Good, 0, new Date(t0), 0.9)
+    const g95 = schedule(base, Rating.Good, 0, new Date(t0), 0.95)
+    const gap90 = (g90.due.getTime() - t0.getTime()) / 86400000
+    const gap95 = (g95.due.getTime() - t0.getTime()) / 86400000
+    expect(gap95).toBeGreaterThan(0)
+    expect(gap95).toBeLessThan(gap90)
+  })
+
+  it('自定义低保留率 0.8 的间隔更长（FSRS 数学：retention 越低允许衰减越多，间隔越长；0.95 < 0.9 < 0.8）', () => {
+    const t0 = new Date('2026-08-01T10:00:00')
+    const base = createNewCard()
+    const g80 = schedule(base, Rating.Good, 0, new Date(t0), 0.8)
+    const g90 = schedule(base, Rating.Good, 0, new Date(t0), 0.9)
+    const g95 = schedule(base, Rating.Good, 0, new Date(t0), 0.95)
+    const gap80 = g80.due.getTime() - t0.getTime()
+    const gap90 = g90.due.getTime() - t0.getTime()
+    const gap95 = g95.due.getTime() - t0.getTime()
+    expect(gap80).toBeGreaterThan(gap90)
+    expect(gap90).toBeGreaterThan(gap95)
+  })
+
+  it('fsrsMaxInterval=60 封顶生效（长间隔不超 60 天，且非卡死）', () => {
+    const t0 = new Date('2026-08-01T10:00:00')
+    let card = schedule(createNewCard(), Rating.Good, 0, new Date(t0), 0.9, 60)
+    // 连续 12 次按期 Good：默认 365 下间隔会指数增长到数百天，应被 60 天封顶截断
+    for (let i = 0; i < 12; i++) {
+      const t = new Date(card.due)
+      card = schedule(card, Rating.Good, 0, new Date(t), 0.9, 60)
+    }
+    const lastGap = (card.due.getTime() - card.lastReview!.getTime()) / 86400000
+    expect(lastGap).toBeLessThanOrEqual(60.5) // maximum_interval 截断 + fuzz 容差
+    expect(lastGap).toBeGreaterThan(30) // 已增长到接近 cap（非调度卡死）
+  })
+})

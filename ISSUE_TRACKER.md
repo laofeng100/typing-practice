@@ -36,6 +36,18 @@
 
 ---
 
+### T-4 ✅ FSRS 测试盲区补齐（E2E 12 流程 / vitest 12 用例）
+> 已补齐（2026-08-01）：此前审查确认 4 项盲区（突击模式/hint 封顶/自定义参数/liveR 排序）零覆盖，现全部落地测试，验证：E2E 12/12 + vitest 12/12。
+- **突击模式（examCram）全链路**：新增 `11-exam-cram.spec.ts`——未开突击只拉 5 张到期卡 → 开启后 7 天窗口拉到 10 张（含未来 3 天）→ batch 放大（10→20）→ 提交走 retention=0.95 分支 due 全部延后 → 恢复设置
+- **hintCount 封顶**：`12-fsrs-details.spec.ts` 复习卡场景（cardState=2 隔离新卡封顶干扰）——带 hint 全对极快 → rating 压到 2；无 hint 同条件 → Easy(4)
+- **零击键守卫负向**：无击键 + 无显式 rating 提交 → 卡总数不变、due 不变、流水不新增
+- **自定义 fsrsRetention 保存→生效**：PUT 0.8 → GET 确认 → 提交走自定义保留率分支；数值方向由 vitest 验证
+- **liveR 排序断言**：5 张卡错开 lastReview（elapsed 10~14h）→ 队列返回 retrievability 非降序（最易遗忘优先）
+- **vitest 新增 3 用例**：突击保留率 0.95 间隔 < 0.9；低保留率 0.8 间隔更长（首次断言方向写反，由测试暴露后修正——FSRS 数学：retention 越低允许衰减越多）；maxInterval=60 封顶生效且非卡死
+- **测试设计教训（已写入文件注释）**：① hint 封顶必须在复习卡场景测（新卡 cardState=0 本身即封顶，无法区分分支）；② 快进 due 必须落在过去（lastReview+24h 会到未来导致队列为空）；③ 跨 spec 断言必须用相对基线（前面流程会留数据）
+
+---
+
 ## FSRS V6 闭环评估
 
 闭环主链路**完整**：建卡（session/route.ts:141-154）→ `schedule()` 调度（fsrs.ts:148）→ 到期取卡（word/route.ts:29-38，`state>0 & due<=now`）→ 前端回传 cardState → 自动评级 `rateTyping()` → 更新卡片 + 写 FsrsReview 日志。新卡首评后 state>0，可正确再入复习队列。

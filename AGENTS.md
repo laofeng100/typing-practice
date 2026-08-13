@@ -29,7 +29,7 @@ bun run lint             # eslint
 bun run db:push          # prisma schema 推送（schema 变更后部署必跑）
 
 # 全链路自动化测试（正式库零接触，详见「自动化测试体系」）
-npm run test:all         # 一键：初始化 e2e.db → 起 3100 测试服务 → E2E 10 流程 → vitest → 90 天模拟 → 摘要
+npm run test:all         # 一键：初始化 e2e.db → 起 3100 测试服务 → E2E 12 流程 → vitest → 90 天模拟 → 摘要
 npm run test:e2e         # 仅 Playwright 流程测试
 npm run test:fsrs        # 仅 FSRS 单元 + 90 天模拟
 npm run test:setup       # 仅重建测试库 e2e.db
@@ -55,7 +55,7 @@ bun run scripts/prewarm-listening-tts.ts
 2. **独立服务**：`PORT=3100` + `DATABASE_URL=file:./db/e2e.db` + `E2E=1`（next 用独立 `.next-e2e` 构建目录，规避 `.next/dev` 锁互斥）
 3. **正式库保护（不可破坏）**：setup-e2e 对 custom.db 仅只读（WAL checkpoint + 文件复制）；路径防呆仅允许 `custom.db → e2e.db`；清空后硬校验业务表必须为 0。正式库基础数据（WordDict/Book/BookWord/WordPhrase/WordExample/WordSynonym/WordRelated/Sentence/GrammarPattern/GrammarSystem/ReadingArticle/ListeningArticle/User）**禁止清理**；业务表清理需用户明确要求并人工确认
 
-测试文件：`tests/e2e/01~10-*.spec.ts`（数字前缀强制顺序，串行 workers=1）、`tests/fsrs/fsrs-unit.test.ts`、`scripts/test/fsrs-simulate.mjs`（90 天模拟，6 项硬指标）、`playwright.config.ts`、`vitest.config.ts`。
+测试文件：`tests/e2e/01~12-*.spec.ts`（数字前缀强制顺序，串行 workers=1；11 突击模式 / 12 FSRS 细节盲区）、`tests/fsrs/fsrs-unit.test.ts`（12 用例：含突击保留率/自定义参数/maxInterval 封顶）、`scripts/test/fsrs-simulate.mjs`（90 天模拟，6 项硬指标）、`playwright.config.ts`、`vitest.config.ts`。
 
 ## Git（2026-07-29 初始化）
 
