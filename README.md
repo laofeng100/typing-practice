@@ -1,7 +1,7 @@
 # 键英双修 - 打字练习与英语背诵系统
 
 > 基于 FSRS V6 记忆算法的打字练习系统，专为小升初学生设计。
-> 从键盘熟悉 → 单词 → 句子 → 阅读 → 听力 → 中文背诵，渐进式解锁，边打字边学习。
+> 从键盘熟悉 → 单词 → 句子 → 阅读 → 听力，渐进式解锁，边打字边学习。
 
 ## ✨ 核心功能
 
@@ -10,7 +10,7 @@
 | 模块 | 说明 |
 |------|------|
 | 学习概览 | 今日数据/学习路径/7天趋势/键盘进度 |
-| 我的成就 | 24个成就徽章/词汇成长曲线/7类分类 |
+| 我的成就 | 22个成就徽章/词汇成长曲线/7类分类 |
 | 学习报告 | 周/月/全部报告/进步对比/个性化建议 |
 | 键盘熟悉 | 6关渐进训练/虚拟键盘/指法高亮/星级评价 |
 | 专项练习 | 薄弱键突破/错题单词/错题句子 |
@@ -40,7 +40,7 @@
 - **FSRS V6 算法**：使用官方 `ts-fsrs` 包，幂律衰减模型，21权重参数，精准遗忘曲线调度
 - **学段自动晋级**：小学→初中→高中，学完当前学段自动解锁下一学段
 - **考前突击模式**：动态调整新词量/复习量/时长上限
-- **TTS语音集成**：英语/中文分离配置，支持音色/语速/音调/停顿调节
+- **TTS语音集成**：英文音色/语速/音调/停顿可调，服务端 env 配置、token 不下发前端
 - **渐进解锁**：键盘6关 + WPM≥40 才能解锁高级模块
 
 ## 🛠 技术栈
@@ -70,7 +70,7 @@
 │   ├── import-content.ts          # 内容表重导（按 head_word 聚合去重）
 │   ├── fix-word-cards.ts          # 词卡数据修复
 │   ├── prewarm-listening-tts.ts   # 听力文章TTS缓存预热（幂等）
-│   ├── test-batch1~4.ts           # 历史回归测试（功能/数据/安全/健壮性）
+│   ├── gen-*.ts / test-batch*.ts  # 历史数据生成与旧回归脚本（已被 test:all 取代，保留备查）
 │   └── test/
 │       ├── setup-e2e.ts           # 重建测试库 e2e.db（只读复制正式库基础表）
 │       ├── run-all.sh             # test:all 全链路编排
@@ -93,7 +93,6 @@
 │   │   │   ├── sentence/          # 句子练习
 │   │   │   ├── article/           # 阅读理解
 │   │   │   ├── listening/         # 听力练习
-│   │   │   ├── chinese/           # 中文背诵
 │   │   │   ├── tts/               # TTS语音代理（synthesize/audio/meta）
 │   │   │   ├── stats/             # 统计（热力图/报告/成就）
 │   │   │   ├── mistakes/          # 错题本
@@ -116,7 +115,6 @@
 │   │   │   ├── sentence-module.tsx    # 句子练习
 │   │   │   ├── reading-module.tsx     # 阅读理解
 │   │   │   ├── listening-module.tsx   # 听力练习（多音色对话）
-│   │   │   ├── chinese-module.tsx     # 中文背诵
 │   │   │   ├── focused-practice.tsx   # 专项练习
 │   │   │   ├── tts-player.tsx         # TTS播放组件
 │   │   │   ├── practice-hud.tsx       # 打字实时指标条
@@ -138,8 +136,9 @@
 │       ├── utils.ts               # 通用工具
 │       └── db.ts                  # Prisma Client
 ├── upload/                        # Excel教学数据源
-├── Dockerfile                     # Docker镜像构建
-├── docker-compose.yml             # Docker Compose编排
+├── Dockerfile                     # Docker镜像构建（内置 curl/tzdata/sqlite3）
+├── docker-compose.yml             # Docker Compose编排（可选 --profile https 启用 Caddy）
+├── Caddyfile                      # HTTPS 反向代理配置（域名占位，自动证书）
 ├── .env                           # 环境变量
 └── package.json
 ```
@@ -163,6 +162,12 @@
 | 模拟 | 90 天 FSRS 调度模拟，6 项硬指标（无卡死/遗忘惩罚/队列正确性/积压防护/复习负担/错题本） |
 
 隔离原则：测试全程只操作 `prisma/db/e2e.db` 与 3100 端口服务（`E2E=1` 时 next 使用独立 `.next-e2e` 构建目录）；正式库 `custom.db` 仅被只读复制基础表，业务表清空只发生在测试库。
+
+构建红线：`next build` 与 `tsc --noEmit` 双重类型检查（`ignoreBuildErrors` 已移除），改代码后类型错误零容忍；改 FSRS 相关必须重跑 `npm run test:fsrs`。
+
+## 🐳 Docker 部署
+
+见 [DEPLOY.md](./DEPLOY.md)：一键 compose 部署、HTTPS（Caddy 自动证书）、SQLite 在线热备份（`.backup`）、升级回滚、TTS 配置与常见问题。
 
 ## 🎨 设计特色
 

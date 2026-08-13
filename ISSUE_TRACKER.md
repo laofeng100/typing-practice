@@ -23,6 +23,19 @@
 
 ---
 
+### T-3 ✅ 交付级深度审查修复（构建绕过 / 专项错题门槛不一致 / 错题置顶失效 / 键盘通关客户端可控 / 学段失步）
+> 已修复（2026-08-01，交付级 review），验证：tsc 零错误 + E2E 10/10 + vitest 9/9 + 90 天模拟 allPass。
+- **构建绕过类型检查（P0）**：`next.config.ts` 曾设 `typescript.ignoreBuildErrors: true`，生产构建不检查类型，掩盖错误 → 已移除，构建与 tsc 同门拦截
+- **专项练习错题门槛与错题本不一致（P1）**：`practice/focused/route.ts` words/sentences 仍含 `difficulty≥5`，首学评 Hard（难度即 5.11）的卡全量混入专项队列，与 mistakes 已修复的门槛（lapses≥1 || totalErrors≥2）冲突 → 两处已对齐
+- **错题本「立即攻克」word 置顶失效（P1）**：focused 的 focusId 强制 `Number.isInteger(Number(...))` 解析，word 卡 cardId 为 head_word 字符串（如 "about"）恒为 NaN → focusId 恒 null → 改为原始字符串透传，类型链（app-shell/mistake-book/focused-practice）同步放宽为 `number | string`
+- **专项 keys 模式全量拉记录（P1）**：`typingRecord.findMany` 无时间窗/无 take，随练习量增长查询无上限 → 加 90 天窗口（与 stats/keys 一致）
+- **键盘通关客户端可控（P1）**：session/route 曾信任客户端传 `passWpm/passAccuracy` 与 `level` 判定通关（篡改可直达通关）→ 改为服务端 `KEYBOARD_LEVELS` 常量判定（level 须 1-6 整数），stars 也由服务端计算
+- **学段晋级不同步 user.stage（P1）**：word 换书晋级/sentence 晋级均不更新 user.stage（仅 reset 会写）→ 仪表盘学段展示与阅读/听力默认学段永久停留在小学 → 三处（word 晋级/sentence 晋级/books 手动切换）均已同步中文学段
+- **P2 顺手修复**：dashboard `newCards` 死指标（state=0 恒 0）改为今日新学词数；word/route 新词卡状态 N+1 改批量 `findMany cardId IN`；auth 签名比较改 hex 解码；schema 过时注释修正；删除死代码 `src/lib/store.ts` + zustand 依赖
+- **遗留（P2 已知权衡，暂不改）**：due 时间点漂移（按天调度不按日界对齐）；首次设置家长 PIN 无验证空窗（孩子可抢先设 PIN，DEPLOY 已提示家长首登即设）；sentence 模块无积压防护公式；库存 retrievability 存复习前旧 R（有单测固化语义，展示层均用实时计算）
+
+---
+
 ## FSRS V6 闭环评估
 
 闭环主链路**完整**：建卡（session/route.ts:141-154）→ `schedule()` 调度（fsrs.ts:148）→ 到期取卡（word/route.ts:29-38，`state>0 & due<=now`）→ 前端回传 cardState → 自动评级 `rateTyping()` → 更新卡片 + 写 FsrsReview 日志。新卡首评后 state>0，可正确再入复习队列。

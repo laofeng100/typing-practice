@@ -1,23 +1,19 @@
-:81 {
-	@transform_port_query {
-		query XTransformPort=*
-	}
+# Caddy 反向代理配置（配合 docker-compose 的 caddy 服务，`docker compose --profile https up -d` 启用）
+# 生产 HTTPS：把 example.com 换成你的域名，Caddy 自动申请/续期 Let's Encrypt 证书（要求域名解析到本机且 80/443 开放）
 
-	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+example.com {
+	encode gzip
 
-	handle {
-		reverse_proxy localhost:3000 {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
+	reverse_proxy typing-practice:3000 {
+		header_up Host {host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
 	}
 }
+
+# 无域名时的 HTTP 直连（内网使用）：
+# http:// {
+# 	encode gzip
+# 	reverse_proxy typing-practice:3000
+# }

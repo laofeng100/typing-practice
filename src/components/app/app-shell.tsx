@@ -120,7 +120,7 @@ export default function AppShell({ user, onLogout }: { user: any; onLogout: () =
   const { toast } = useToast()
   const [view, setView] = useState('dashboard')
   const [focusedInit, setFocusedInit] = useState<'keys' | 'words' | 'sentences' | undefined>(undefined)
-  const [focusedId, setFocusedId] = useState<number | undefined>(undefined)
+  const [focusedId, setFocusedId] = useState<number | string | undefined>(undefined)
   const [dashData, setDashData] = useState<any>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -213,7 +213,7 @@ export default function AppShell({ user, onLogout }: { user: any; onLogout: () =
               </h1>
               <p className="text-sm text-muted-foreground">自动收集高错误率和多次遗忘的单词/句子，重点复习</p>
             </div>
-            <MistakeBook onPractice={(t, id) => {
+            <MistakeBook onPractice={(t: string, id: number | string) => {
               setFocusedInit(t === 'word' ? 'words' : 'sentences')
               setFocusedId(id)
               switchView('focused')

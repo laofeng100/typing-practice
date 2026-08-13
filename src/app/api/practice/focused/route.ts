@@ -21,8 +21,10 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url)
   const type = searchParams.get('type') || 'keys'
+  // focusId 按原始字符串透传：word 卡 cardId 为 head_word（如 "about"），sentence 卡为数字 id 字符串，
+  // 两者都以字符串形式存于 FsrsCard.cardId，直接字符串匹配即可（不再强制数字解析，否则 word 置顶失效）
   const focusIdRaw = searchParams.get('focusId')
-  const focusId = focusIdRaw && Number.isInteger(Number(focusIdRaw)) && Number(focusIdRaw) > 0 ? String(Number(focusIdRaw)) : null
+  const focusId = focusIdRaw && focusIdRaw.length > 0 && focusIdRaw.length <= 64 ? focusIdRaw : null
   const now = new Date()
   // 错题卡排序：实时可提取性升序（最危险的优先），focusId 指定卡置顶
   const sortWeakCards = (cards: any[], take: number) => {
@@ -38,8 +40,11 @@ export async function GET(req: Request) {
 
   if (type === 'keys') {
     // 薄弱键专项：找出错误最多的键，生成针对性练习文本
+    // 窗口限制：只看近 90 天（与 stats/keys 一致），避免全量历史查询无上限（错误习惯随进步改变，旧数据会稀释诊断）
+    const KEY_STATS_WINDOW_DAYS = 90
+    const windowStart = new Date(Date.now() - KEY_STATS_WINDOW_DAYS * 86400000)
     const records = await db.typingRecord.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, createdAt: { gte: windowStart } },
       select: { errorKeysList: true },
     })
     const errorMap: Record<string, number> = {}
@@ -99,12 +104,13 @@ export async function GET(req: Request) {
   }
 
   if (type === 'words') {
-    // 错题单词专项：高难度/多遗忘的单词
+    // 错题单词专项：门槛与错题本一致（lapses≥1 或 totalErrors≥2），
+    // 不用 difficulty>=5 作门槛——首学评 Hard 难度即达 5.11，会把所有首学 Hard 的卡全量混入专项队列
     const weakCardsRaw = await db.fsrsCard.findMany({
       where: {
         userId: user.id,
         cardType: 'word',
-        OR: [{ difficulty: { gte: 5 } }, { lapses: { gte: 1 } }, { totalErrors: { gte: 2 } }, ...(focusId ? [{ cardId: focusId }] : [])],
+        OR: [{ lapses: { gte: 1 } }, { totalErrors: { gte: 2 } }, ...(focusId ? [{ cardId: focusId }] : [])],
       },
       take: 100,
     })
@@ -122,12 +128,12 @@ export async function GET(req: Request) {
   }
 
   if (type === 'sentences') {
-    // 错题句子专项
+    // 错题句子专项：门槛与错题本一致（lapses≥1 或 totalErrors≥2），不用 difficulty 门槛
     const weakCardsRaw = await db.fsrsCard.findMany({
       where: {
         userId: user.id,
         cardType: 'sentence',
-        OR: [{ difficulty: { gte: 5 } }, { lapses: { gte: 1 } }, { totalErrors: { gte: 2 } }, ...(focusId ? [{ cardId: focusId }] : [])],
+        OR: [{ lapses: { gte: 1 } }, { totalErrors: { gte: 2 } }, ...(focusId ? [{ cardId: focusId }] : [])],
       },
       take: 100,
     })

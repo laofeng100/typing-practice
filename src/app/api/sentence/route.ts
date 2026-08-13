@@ -86,6 +86,8 @@ export async function GET(req: NextRequest) {
       if (currentIdx < STAGE_ORDER.length - 1) {
         stage = STAGE_ORDER[currentIdx + 1]
         stageUpgraded = true
+        // 晋级同步用户学段（与单词模块一致，避免仪表盘/阅读/听力默认学段停留在旧学段）
+        await db.user.update({ where: { id: user.id }, data: { stage } })
         candidates = await db.sentence.findMany({
           where: { stage },
           orderBy: { order: 'asc' },

@@ -3,7 +3,36 @@
 > 项目介绍/功能/结构见 [README.md](README.md)；部署运维见 [DEPLOY.md](DEPLOY.md)；问题修复明细见 [ISSUE_TRACKER.md](ISSUE_TRACKER.md)。
 > 本文档只记录各阶段里程碑与遗留待办。
 
-## 当前状态：阶段十七完成 ✅（2026-08-01）
+## 当前状态：阶段十八完成 ✅（2026-08-01）
+
+### 阶段十八（2026-08-01）：交付级深度审查与完善
+
+**审查方法**：逐文件证据驱动 review（FSRS 集成专项 + 架构/工程 + 学习效果三维度），模拟器 90 天 6 项指标验证学习闭环（每卡平均 3.2 次复习、间隔 1→2→5→8→18 天指数增长、Again S 崩落 0.29、积压停发正常）。
+
+**P0 修复**：
+- `next.config.ts` 移除 `ignoreBuildErrors`——生产构建与 tsc 同门拦截类型错误（交付红线）
+
+**P1 修复**：
+- 专项练习（focused）错题门槛与错题本对齐：移除 `difficulty≥5`（首学 Hard 卡不再混入专项队列）
+- 错题本「立即攻克」word 置顶失效修复：focusId 不再强制数字解析（word cardId 为 head_word 字符串），类型链 app-shell/mistake-book/focused-practice 同步放宽
+- 专项 keys 模式加 90 天窗口（原全量拉 typingRecord 无上限）
+- 键盘通关服务端化：passWpm/passAccuracy/stars 由 `KEYBOARD_LEVELS` 常量判定，客户端传值不参与解锁
+- 学段晋级同步 `user.stage`（word 换书晋级/sentence 晋级/books 手动切换三处）——修复仪表盘与阅读/听力默认学段永久停留小学
+
+**P2 修复**：
+- dashboard `newCards` 死指标（state=0 恒 0）→ 改为今日新学词数（DailyStat.wordNew）
+- word/route 新词卡状态 N+1 → 批量 `findMany cardId IN`
+- auth.ts 签名比较改 hex 解码；schema 过时注释修正（FsrsCard 白名单/GrammarPattern 121/ chineseDone 死字段标注）
+- 死代码清理：`src/lib/store.ts` + zustand 依赖移除（无消费者）
+
+**Docker 部署完善**：
+- Dockerfile 内置 sqlite3 CLI；compose 新增可选 Caddy HTTPS 服务（`--profile https`）；Caddyfile 重写为标准域名模板
+- DEPLOY.md 全面重写：在线热备份（`.backup` 替代裸 cp）、空库初始化全流程、容器内 db:push 全路径命令（镜像无 node_modules/.bin）、升级回滚、PIN 丢失处置
+- .env.example 补 SESSION_SECRET 说明
+
+**验证**：tsc 零错误；vitest 9/9 PASS；E2E 10/10 PASS（1.0m）；90 天模拟 allPass=true。
+
+---
 
 ### 阶段十七（2026-07-25 ~ 08-01）：词典升级收尾 + FSRS 修复 + 性能优化 + 全链路测试体系
 

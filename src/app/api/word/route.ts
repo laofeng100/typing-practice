@@ -7,6 +7,7 @@ import { bookSortKey } from '@/app/api/books/route'
 
 // 学段顺序（与 Book.stage 对应）
 const STAGE_ORDER = ['primary', 'middle', 'high']
+// Book.stage（英文）→ 中文学段映射：返回展示（currentStage）与晋级换书时同步用户学段共用
 const STAGE_LABEL: Record<string, string> = { primary: '小学', middle: '初中', high: '高中' }
 
 // 词条详情 select（新词/复习词共用）：音标/记忆法/例句/短语/近义词/相关词
@@ -116,7 +117,8 @@ export async function GET(req: NextRequest) {
     while (unlearnedRows.length === 0 && bookWordRows.length > 0 && guard < 10) {
       const nextBook = await findNextBook(currentBook)
       if (!nextBook) break
-      await db.user.update({ where: { id: user.id }, data: { bookId: nextBook.id } })
+      // 晋级换书时同步用户学段（否则阅读/听力默认学段与仪表盘展示永久停留在旧学段）
+      await db.user.update({ where: { id: user.id }, data: { bookId: nextBook.id, stage: STAGE_LABEL[nextBook.stage] || user.stage } })
       currentBook = nextBook
       stageUpgraded = true
       bookWordRows = await db.bookWord.findMany({
@@ -133,6 +135,12 @@ export async function GET(req: NextRequest) {
     // 详情含例句/短语/近义词/相关词，全教材拉取开销大）
     const newWordIds = unlearnedRows.slice(0, newWordTarget).map(r => r.wordId)
     if (newWordIds.length > 0) {
+      // 批量取新词卡状态（避免每词一次 findUnique 的 N+1；unlearnedRows 已排除 state>0 卡，命中至多 state=0）
+      const newCards = await db.fsrsCard.findMany({
+        where: { userId: user.id, cardType: 'word', cardId: { in: newWordIds } },
+        select: { cardId: true, state: true },
+      })
+      const cardStateMap = new Map(newCards.map(c => [c.cardId, c.state]))
       const detailRows = await db.wordDict.findMany({
         where: { id: { in: newWordIds } },
         select: {
@@ -143,11 +151,8 @@ export async function GET(req: NextRequest) {
       const rankMap = new Map(unlearnedRows.map(r => [r.wordId, r.wordRank]))
       detailRows.sort((a, b) => (rankMap.get(a.id) ?? 999999) - (rankMap.get(b.id) ?? 999999))
       for (const w of detailRows) {
-        const card = await db.fsrsCard.findUnique({
-          where: { userId_cardType_cardId: { userId: user.id, cardType: 'word', cardId: w.id } },
-        })
         const { books, ...rest } = w
-        newWords.push({ ...rest, wordRank: books[0]?.wordRank ?? null, cardState: card?.state || 0 })
+        newWords.push({ ...rest, wordRank: books[0]?.wordRank ?? null, cardState: cardStateMap.get(w.id) || 0 })
       }
     }
   }
@@ -170,7 +175,7 @@ export async function GET(req: NextRequest) {
           cardState: c.state,
           stability: c.stability,
           difficulty: c.difficulty,
-          // 实时计算可提取性（库存值恒为1.0，不可信）
+          // 实时计算可提取性（库存 retrievability 存的是上次复习时的旧 R，非当前值，不可直接展示）
           retrievability: calculateRetrievability({
             stability: c.stability,
             difficulty: c.difficulty,

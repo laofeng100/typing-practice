@@ -2,7 +2,7 @@
 
 > 本文档按文件/函数粒度梳理项目全部手写源码。`docs/tts-server-api.md` 介绍外部 TTS 服务；`src/components/ui/**` 为 shadcn New York 风格通用组件（~50 个文件），本文不展开。
 >
-> 工程统计：手写代码 ~16,172 行 / 107 TS/TSX 文件 + 358 行 schema + 313 行 CSS。
+> 工程统计：手写代码 ~15,620 行 / 106 TS/TSX 文件 + 422 行 schema + 313 行 CSS。
 
 ---
 
@@ -84,13 +84,13 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 
 ---
 
-## 2. 核心库 `src/lib/` (834 行)
+## 2. 核心库 `src/lib/` (900 行)
 
-### 2.1 `lib/db.ts` (13)
+### 2.1 `lib/db.ts` (12)
 - **导出**：`db` (PrismaClient 单例)
 - **逻辑**：`globalThis.__db` 缓存防止 dev 热重载创建多实例；非生产环境 `log: ['query','warn','error']`
 
-### 2.2 `lib/auth.ts` (58)
+### 2.2 `lib/auth.ts` (97)
 - **导出**：`SESSION_COOKIE`、`getCurrentUser`、`getCurrentUserOrNull`、`setCurrentUser`、`clearCurrentUser`
 - **常量**：`SESSION_COOKIE = 'typing_user_id'`
 - **函数**：
@@ -100,7 +100,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
   - `getCurrentUserOrNull()`: 永不 throw 的版本
 - **约定**：免密设计（家庭场景），无密码字段；phone 字段 API 层必剥离
 
-### 2.3 `lib/settings.ts` (159)
+### 2.3 `lib/settings.ts` (145)
 - **导出**：`DEFAULT_SETTINGS`、`Settings`、`getRawSettings`、`getSettings`、`setSetting`、`getOrCreateDailyStat`、`checkDailyLimit`
 - **常量** `DEFAULT_SETTINGS`（28 字段）：
   - 时长：`dailyLimitMin=15` / `singleLimitMin=30`
@@ -110,7 +110,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
   - 突击：`examCramMode=false` / `examCramIntensity=50`
   - 家长：`parentPin=''`
   - 界面：`showKeyboard=true` / `showFingerGuide=true` / `soundFeedback=false` / `fontSize='medium'`
-  - TTS：`ttsServerUrl/ttsToken` 走 env（永远不读 DB）；`enVoiceId='English_PassionateWarrior'` 等英文 4 项停顿；`cnVoiceId='presenter_male'` 等中文 3 项停顿
+  - TTS：`ttsServerUrl/ttsToken` 走 env（永远不读 DB）；英文音色 7 项（`enVoiceId='English_PassionateWarrior'` + 语速/音量/音调 + 3 停顿）；中文 TTS 已随古诗词模块下线（`lang='cn'` 复用英文配置，无 cn 设置键）
 - **函数**：
   - `getRawSettings(userId)`: 读 DB KV → 合并默认值 → 强制用 env 覆盖 TTS 服务器/token
   - `getSettings(userId)`: 调 `getRawSettings` → 若 `examCramMode=true` 临时放大 `wordBatchSize × (1 + intensity/100 × 2)` 等（**不持久化**，每次请求现算）
@@ -118,7 +118,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
   - `getOrCreateDailyStat(userId, dateStr?)`: 当日统计 upsert（date 用 `localDateStr()`）
   - `checkDailyLimit(userId)`: `usedMin = floor(totalMs / 60000)` 与 `dailyLimitMin×60000ms` 对比（不再按模块加权）
 
-### 2.4 `lib/fsrs.ts` (204)
+### 2.4 `lib/fsrs.ts` (210)
 - **导出**：`DEFAULT_PARAMS`、`getFsrs`、`FsrsCardState` (interface)、`RatingType`、`StateType`、`createNewCard`、`calculateRetrievability`、`schedule`、`rateTyping`、`getDueCards`、`getRetentionRate`、`Rating`、`State` (re-export from ts-fsrs)
 - **常量** `DEFAULT_PARAMS.w`: 21 元素 FSRS-6 权重数组
 - **函数**：
@@ -157,7 +157,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
   - `compareTexts(target, input)`: 逐字符比对，支持 surrogate pairs（`[...target]`）；返回 `CharCompare[]`，含 `correct/wrong/next/wrongKeyIndex`
   - `getErrorChars(target, input)`: 错误字符数组
 
-### 2.7 `lib/achievements.ts` (109)
+### 2.7 `lib/achievements.ts` (144)
 - **导出**：`Achievement` (interface)、`computeAchievements`
 - **函数** `computeAchievements(userId)`:
   - 聚合：会话总时长、FSRS 各 cardType 已学卡数（state>0）、键盘完成关数、最佳 WPM、最近 30 天活跃天数、连续打卡天数
@@ -172,9 +172,9 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 
 ---
 
-## 3. API 路由 `src/app/api/` (1,898 行)
+## 3. API 路由 `src/app/api/` (2,076 行)
 
-### 3.1 `api/route.ts` (5)
+### 3.1 `api/route.ts` (4)
 - `GET` → `{message:"Hello, world!"}` (调试用)
 
 ### 3.2 `api/auth/route.ts` (63)
@@ -185,9 +185,9 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 ### 3.3 `api/users/route.ts` (11)
 - **GET**: 返回所有固定账号（`id,name,nickname,avatar,stage,grade`，**不含 phone**）用于登录页
 
-### 3.4 `api/session/route.ts` (297) ⭐核心
+### 3.4 `api/session/route.ts` (337) ⭐核心
 - **POST** 通用练习提交
-- **入参**: `{module, subModule, durationMs, totalKeys, correctKeys, totalChars, records[], level?, score?, stars?, hintCount?}`
+- **入参**: `{module, subModule, durationMs, totalKeys, correctKeys, totalChars, records[], level?, score?, stars?}`
 - **流程**:
   1. 解析 `records`，每条 `{cardType,cardId,targetText,inputText,durationMs,totalKeys,correctKeys,errorKeys,rating,hintCount,cardState}`
   2. 计算 WPM / accuracy（`Math.max(1,durationMs/60000)` 防除零）
@@ -195,13 +195,13 @@ word-module.tsx ──GET──▶ /api/word?mode=review
   4. 考前突击：`retention=0.95`
   5. `updateFsrsCard(record, retention, maxInterval)`: 事务内 读 → `schedule` → upsert FsrsCard → insert FsrsReview
   6. `updateDailyStat(module, fields)`: 按 module 分发 — `keyboard→keyboardMs` / `wordNew/wordReview/wordCorrect` / `sentenceDone` / `articleDone` / `listeningDone`；重算 `avgWpm` / `avgAccuracy`（注：DailyStat.chineseDone 字段保留但无写入路径）
-  7. 键盘关卡模式：`upsertProgress(userId,module,level,passWpm,passAccuracy,passed,stars)`；通过则解锁 `level+1`（创建或激活）
+  7. 键盘关卡模式：通关阈值取**服务端常量 `KEYBOARD_LEVELS`**（level 须为 1-6 整数，passWpm/passAccuracy/stars 由服务端按关卡配置计算，不信任客户端传值）；通过则解锁 `level+1`（创建或激活）
   8. 前后对比 `computeAchievements`，diff 出新解锁返回
 - **校验**: rating 范围 1-4（非法回退自动评级）
 
-### 3.5 `api/word/route.ts` (213) ⭐核心
+### 3.5 `api/word/route.ts` (255) ⭐核心
 - **GET**: 返回今日单词练习队列
-- **查询参数**: `mode=new|review|mixed`、`stage=小学/初中/高中`
+- **查询参数**: `mode=new|review|mixed`（学段由 user.bookId 决定）
 - **复习流程**:
   - `fsrsCard.findMany({cardType:'word', due ≤ now+7天(突击)/now, state>0})` 取 `wordReviewBatchSize×3`
   - 内存 `calculateRetrievability` 实时 R，排序取前 `wordReviewBatchSize`
@@ -209,69 +209,71 @@ word-module.tsx ──GET──▶ /api/word?mode=review
   - 已学 ID 用 `select: {cardId: true}` 节省带宽
 - **新词流程**:
   - 积压防护公式 — `dueCount > wordReviewBatchSize×5 → 0` / `>×3 → batchSize/2` / 否则 `batchSize`
-  - SQLite `notIn` 限制 → 分批取候选 + 内存过滤
-  - 当前学段学完自动晋级：`user.update({stage:'初中'|'高中'})`，晋级阈值 = 该学段 word 数
-- **返回**: `{words:[{id,en,zh,pos,stage,difficulty,practiced}], totalReview, totalNew, stageAdvanced}`
+  - 候选 = 当前教材 BookWord 词序（内存过滤已学），新词卡状态**批量 `findMany cardId IN`**（非逐词 findUnique）
+  - 当前教材全部学完自动晋级：`user.update({bookId: 下一册, stage: 同步中文学段})`，同版本下一册 → 跨学段第一本 → 末本停留
+- **返回**: `{mode, newWords, reviewWords, currentStage, stageUpgraded, currentBook, stats{totalLearned,totalWords,dueCount,backlog,currentStageProgress}}`
 
-### 3.6 `api/sentence/route.ts` (126)
+### 3.6 `api/sentence/route.ts` (128)
 - **GET**: 句子队列
-- **逻辑**: 与 word 类似 — `mode='review'` 跨学段取 FSRS 到期，按 liveR 排序；`mode='practice'` 取当前学段新句，自动晋级
-- **差异**: `limit=10`（不可配）；`candidateBatch = limit×5 ≤ 100`；`offset` 上限 5000
+- **逻辑**: 与 word 类似 — `mode='review'` 跨学段取 FSRS 到期，按 liveR 排序；`mode='practice'` 取当前学段新句，学段学完自动晋级
+- **晋级**: 学段学完时同步 `user.update({stage})`（与单词模块一致，保持仪表盘/阅读/听力默认学段同步）
+- **差异**: `limit=10`（不可配）；`candidateBatch = limit×5 ≤ 100`；`offset` 上限 5000；无积压防护公式（新句供给不受复习债影响）
 
-### 3.7 `api/listening/route.ts` (36)
+### 3.7 `api/listening/route.ts` (40)
 - **GET**: `?id` 返回单篇（含 content/questions/vocabulary/grammarPoints JSON）；否则按学段返回列表（id/order/title/category/wordCount/difficulty）
 - 无读写，只查 `listeningArticle`
 
-### 3.8 `api/article/route.ts` (52)
-- **GET**: 阅读文章列表 — join `fsrsCard` 标记 `practiced`(是否做过) / `reps`(次数)
+### 3.8 `api/article/route.ts` (57)
+- **GET**: 阅读文章列表 — 已退出 FSRS，用 `TypingRecord.groupBy(cardId)` 标记 `practiced`(是否做过) / `reps`(次数)；`?id` 返回单篇
 
 ### 3.9 ~~api/chinese/route.ts~~（v2 阶段5 已全链路删除，勿恢复）
 
-### 3.10 `api/dashboard/route.ts` (96)
+### 3.10 `api/dashboard/route.ts` (99)
 - **GET**: 仪表盘聚合
-- **字段**: `user / settings / todayStat / keyboardProgress / keyboardUnlocked / advancedUnlocked / bestWpm / bestAccuracy / dueCards / newCards / wordProgress / recentSessions / streak / sentenceProgress / articleProgress / listeningProgress`
+- **字段**: `user / settings / todayStat / keyboardProgress / keyboardUnlocked / advancedUnlocked / bestWpm / bestAccuracy / dueCards / newCards / wordProgress / recentSessions / streak / currentBookTitle`
+- **`newCards`**: 今日新学词数（`todayStat.wordNew`；原先按 state=0 统计恒为 0）
 - **解锁判定**: `keyboardUnlocked = 6关全 completed` 或 `bestWpm ≥ wpmUnlockThreshold && bestAccuracy ≥ accuracyUnlockThreshold`
 - **streak**: 今天未练不算断签（cursor 退 1 天开始）
 
-### 3.11 `api/mistakes/route.ts` (84)
+### 3.11 `api/mistakes/route.ts` (86)
 - **GET**: 错题本
-- **筛选**: `OR: difficulty≥5 || lapses≥1 || totalErrors≥2`
+- **筛选**: `OR: lapses≥1 || totalErrors≥2`（不用 difficulty 门槛——首学评 Hard 难度即达 5.11 会误收全部首学 Hard 卡）
 - **分组**: `grouped{word/sentence}` + `stats`（每类总数/总错误数）
 - **批量 join**: 用 `id IN [...]` 一次性取资源数据
 
-### 3.12 `api/progress/route.ts` (33)
+### 3.12 `api/progress/route.ts` (42)
 - **GET**: 关卡进度列表
 - **`maxUnlocked`**: 已通关最高 level + 1（强制解锁下一关，即使记录缺失）
 
-### 3.13 `api/practice/focused/route.ts` (132)
-- **GET**: `?type=keys|words|sentences`
-  - **keys**: 聚合 `TypingRecord.errorKeysList` 统计错误键（按卡类型分），生成 3 类训练 — 单键强化 / 双键交替 / 含薄弱键的常见单词综合
-  - **words**: 错题单词（同 mistakes 条件，取 15 条）
-  - **sentences**: 错题句子（10 条）
+### 3.13 `api/practice/focused/route.ts` (154)
+- **GET**: `?type=keys|words|sentences`；`focusId` 按原始字符串透传（word 卡 cardId 为 head_word，sentence 为数字 id 字符串），命中卡置顶
+  - **keys**: 聚合近 90 天 `TypingRecord.errorKeysList` 统计错误键（与 stats/keys 同窗口），生成 3 类训练 — 单键强化 / 双键交替 / 含薄弱键的常见单词综合
+  - **words**: 错题单词（门槛与错题本一致：`lapses≥1 || totalErrors≥2`，取 15 条）
+  - **sentences**: 错题句子（同门槛，10 条）
 
-### 3.14 `api/data/reset/route.ts` (87)
+### 3.14 `api/data/reset/route.ts` (101)
 - **POST**: 清除当前用户数据
 - **删除范围**（事务内 deleteMany）: `FsrsCard / FsrsReview / TypingSession / TypingRecord / UserProgress / Assessment / DailyStat / UserSetting`
-- **重置**: `user.update({stage:'小学',grade:1})`
+- **重置**: `user.update({stage:'小学', grade:'小升初', bookId:'PEPXiaoXue3_1'})`
 - **返回**: `{success, deleted: {...counts 8 类业务表}, preserved}`（preserved = 家长管控键保留；教学数据表本身不删）
 
-### 3.15 `api/settings/route.ts` (80) ⭐核心
+### 3.15 `api/settings/route.ts` (89) ⭐核心
 - **GET**: 返回 `{settings, effectiveSettings}`（含 `parentPin` 掩码 `••••`、`ttsToken` 掩码 `••••••••`）
-- **PUT**: 用 zod schema 校验全部 28 字段（`fsrsRetention: 0.7-0.99`、`dailyLimitMin: 5-120`、`intensity: 0-100` 等范围限制）；未知 key 忽略；整体失败返回 `details`；调 `setSetting` 写入
+- **PUT**: 用 zod schema 校验 22 个可写键（`fsrsRetention: 0.7-0.99`、`dailyLimitMin: 5-120`、`intensity: 0-100` 等范围限制）；未知 key 忽略；整体失败返回 `details`；调 `setSetting` 写入
 - **白名单**: PUT 永远忽略 `ttsServerUrl/ttsToken`（仅 env 可配，ISSUE_TRACKER C-7）
 
-### 3.16 `api/settings/verify-pin/route.ts` (25)
+### 3.16 `api/settings/verify-pin/route.ts` (31)
 - **POST**: 校验 `parentPin`（按 userId 限流 10/分钟）；返回 `{ok: true/false}`
 
-### 3.17 `api/stats/achievements/route.ts` (88)
+### 3.17 `api/stats/achievements/route.ts` (59)
 - **GET**: 成就墙数据 + 统计 + 词汇累计成长曲线
-- **曲线**: 按天累计去重 `cardId`（从 `FsrsReview` join `TypingSession` 按日期 group）
+- **曲线**: `FsrsReview` 按 reviewedAt 升序全量拉取，内存跨天去重 `cardId`（每词只在首次复习当天计入）后按天累计
 
-### 3.18 `api/stats/keys/route.ts` (72)
+### 3.18 `api/stats/keys/route.ts` (76)
 - **GET**: 键位热力图数据
 - **逻辑**: 聚合 `errorKeysList` JSON（按 `key → count`），估算每键错误率（用全局错误率推算 `total = count / globalAcc`）；按 module 分组；近 30 天每日 stats
 
-### 3.19 `api/stats/report/route.ts` (130)
+### 3.19 `api/stats/report/route.ts` (148)
 - **GET**: `?range=week|month|all` 学习报告
 - **字段**: 模块分布 / 每日趋势 / 薄弱键 Top10 / FSRS 状态（按 cardType 分组的 due/stability/lapses）/ 个性化建议数组（基于 `avgWpm/accuracy/cardsByType.due` 等）/ 上期对比（计算前 N 天的 prev）
 
@@ -297,7 +299,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 
 ---
 
-## 4. 应用层 `src/app/` + `src/components/app/` (2,025 行)
+## 4. 应用层 `src/app/` + `src/components/app/` (2,071 行，含 CSS)
 
 ### 4.1 `app/layout.tsx` (43)
 - **导出**: `metadata` (title/description)、`RootLayout`
@@ -342,7 +344,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 - **动效**: framer-motion `layoutId` 实现移动指示条 spring 动画
 - **移动端**: 底部 5 Tab 固定栏（`lg:hidden`）+ Sheet 抽屉
 
-### 4.7 `components/app/dashboard.tsx` (371) ⭐核心
+### 4.7 `components/app/dashboard.tsx` (370) ⭐核心
 - **职责**: 仪表盘（今日任务卡 + 4 统计卡 + 学习路径 + 键盘关卡 + 7 天趋势柱状图）
 - **常量**: `ENCOURAGEMENTS`（5 句鼓励语，按年内日序轮换）/ `pathNodes`（5 节点：keyboard→word→sentence→reading→listening）
 - **`timeGreeting()`**: 早/午/晚问候
@@ -351,7 +353,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 - **图表**: recharts `BarChart`（昨天到今天 7 天，深色当天高亮 + 自定义 Tooltip）
 - **键盘进度**: `KEYBOARD_LEVELS` 关卡条 + 星级
 
-### 4.8 `components/app/settings-panel.tsx` (783) ⭐核心
+### 4.8 `components/app/settings-panel.tsx` (740) ⭐核心
 - **职责**: 设置中心（多分区 + 家长管控门）
 - **状态**: `s`（原始输入）/ `effective`（运行时生效，含突击动态放大）/ `parentUnlocked` / `newPin`
 - **`DEFAULTS`**: 与 `lib/settings DEFAULT_SETTINGS` 镜像（前端回退用）
@@ -366,14 +368,14 @@ word-module.tsx ──GET──▶ /api/word?mode=review
   4. FSRS（retention / maxInterval）
   5. 单词练习（含考前突击滑动条 intensity 0-100，显示「生效值」`×(1+i/100×2)`）
   6. 界面（next-themes 三态切换 / showKeyboard / showFingerGuide / soundFeedback / fontSize）
-  7. TTS（英/中双区，env-only 服务器配置提示为只读 Card，音色选择器调 `/api/tts/meta`）
+  7. TTS（英文音色/语速/音量/音调/停顿；服务器 env 配置提示为只读 Card，音色选择器调 `/api/tts/meta`；中文 TTS 已随古诗词下线）
   8. 账号信息 + 数据管理
 
 ---
 
-## 5. 练习组件 `src/components/practice/` (5,208 行)
+## 5. 练习组件 `src/components/practice/` (5,122 行)
 
-### 5.1 `keyboard-module.tsx` (460)
+### 5.1 `keyboard-module.tsx` (469)
 - **状态机**: `select → practice → result`
 - **`currentLevel`**: 默认 1，mount 时拉 `/api/progress` 取 `maxUnlocked`
 - **关卡卡**: 锁定（idx>0 && currentLevel≤idx）/ 当前 / 已通关 三态视觉
@@ -384,7 +386,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 - **庆祝**: `Confetti` 仅 3 星触发
 - **拦截**: `todayUsedMin >= dailyLimitMin` 时 toast 拦截进入
 
-### 5.2 `word-module.tsx` (718) ⭐核心
+### 5.2 `word-module.tsx` (982) ⭐核心
 - **状态机**: `select → practice → result`
 - **三模式**: new（新词）/ review（复习）/ mixed（混合）
 - **三种 UI 形态**:
@@ -398,7 +400,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 - **错词 rematch**: "再战错词" 按钮（趁热打铁）
 - **`loadQueue(mode)`**: fetch `/api/word?mode=...`（403 → toast 拦截）
 
-### 5.3 `sentence-module.tsx` (490)
+### 5.3 `sentence-module.tsx` (492)
 - **状态机**: `select → practice → result`
 - **学段卡**: 小学/初中/高中
 - **模式**: `practice`（学新句）/ `review`（FSRS 到期）
@@ -435,9 +437,9 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 ### 5.7 `focused-practice.tsx` (465)
 - **三入口**: keys/words/sentences → `/api/practice/focused?type=...`
 - **keys 模式**: 错误键→单键强化 / 双键交替 / 含薄弱键的单词综合
-- **words/sentences**: 复用 mistakes 数据（`difficulty≥5 || lapses≥1 || totalErrors≥2`）
+- **words/sentences**: 复用错题本数据（`lapses≥1 || totalErrors≥2`）
 - **上报**: `module=keyboard|word|sentence`、`subModule=focused-${type}`、`cardType/cardId` 携带
-- **`initialType` props**: 支持从 mistake-book 直接跳入
+- **`initialType`/`initialId` props**: 支持从 mistake-book 直接跳入（word 卡 id 为 head_word 字符串，`focusId` 原样透传置顶）
 
 ### 5.8 `achievements.tsx` (253)
 - **导出**: `Achievements`、`AchievementGrid`（内部）
@@ -456,12 +458,12 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 - **模块统计卡**: 每模块总键数/错误数/准确率
 - **手指圆点**: 各键配左蓝右黄拇指灰
 
-### 5.10 `mistake-book.tsx` (224)
+### 5.10 `mistake-book.tsx` (195)
 - **导出**: `MistakeBook`、`MistakeList`（内部）
 - **4 Tab**: word/sentence/article/listening
 - **每条**: 难度色带 + 错误率 + 复习次数 + "立即攻克" 按钮（callback `onPractice(type,id)` → app-shell 跳转 focused-practice）
 
-### 5.11 `study-report.tsx` (385)
+### 5.11 `study-report.tsx` (384)
 - **导出**: `StudyReport`
 - **`range`**: week/month/all
 - **4 核心指标卡**: 总时长/总键数/平均 WPM/平均准确率（含 delta 显示 vs 上期）
@@ -482,7 +484,7 @@ word-module.tsx ──GET──▶ /api/word?mode=review
 - **顶部 sticky 条**: WPM/准确率/进度
 - **数字滚动**: framer-motion popLayout
 
-### 5.14 `tts-player.tsx` (196) ⭐核心
+### 5.14 `tts-player.tsx` (283) ⭐核心
 - **导出**: `useTTS`（hook）、`TTSButton`（组件）
 - **`useTTS()`**: 返回 `{speak, stop, loading, playing, error}`
   - **缓存**: 内存 `cacheRef` 键 = `${lang}|${scene}|${text}|${voiceId}|${speed}` → 同请求秒回
@@ -613,10 +615,14 @@ shadcn New York 风格通用组件，纯样板，本文不展开。
 ### 9.2 测试文件
 - `tests/e2e/01~10-*.spec.ts`：Playwright 流程测试，**数字前缀强制执行顺序**（文件名序），workers=1 串行（SQLite 写串行）；global-setup 用 e2e-didi 登录存 storageState；helpers.ts 提供 sqlite 直查（query/exec 带 busy retry）与 ensureAdvancedUnlocked（直写键盘进度解锁高级模块）
 - `tests/fsrs/fsrs-unit.test.ts`：vitest 单元测试（rateTyping 阈值矩阵 / 首学 Hard 直进 Review / learning_steps 无卡死 / R 存储）
-- `scripts/test/fsrs-simulate.mjs`：90 天模拟（真实 API 提交 + due 快进），6 项硬指标 a-f 全 PASS 才算过
+- `scripts/test/fsrs-simulate.mjs`：90 天**内存模拟**（ts-fsrs 官方实现 + 项目同款参数与 schedule 封装，不调 API），6 项硬指标 a-f 全 PASS 才算过
 
 ### 9.3 常见坑（测试维护时注意）
 - Prisma SQLite DateTime 存 integer 毫秒；exec 直写 due 必须用毫秒 number，ISO text 与 integer 比较恒不匹配 → 复习队列永远为空
 - `/api/dashboard` GET 也会 upsert 今日 DailyStat → 重置类断言必须限定 userId
 - 首学评级封顶 Hard（cardState=0 且非显式 rating）→ FsrsReview 首学也写流水，计数断言用 before+N
 - 新词 UI 队列排序依赖 wordRank，不稳定 → 数据构造类测试优先走 API 提交
+
+### 9.4 构建红线（交付级）
+- `next.config.ts` 已移除 `ignoreBuildErrors`：`next build` 会做全量类型检查，与 `tsc --noEmit` 同门拦截类型错误
+- 改完代码必跑 `node node_modules/typescript/bin/tsc --noEmit` 零错误；改 FSRS 相关需重跑 `npm run test:fsrs`（vitest + 90 天模拟）

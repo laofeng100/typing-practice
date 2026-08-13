@@ -14,7 +14,7 @@ import { Target, Keyboard, BookOpen, FileText, CheckCircle2, RefreshCw, Zap, Ale
 
 type FocusedType = 'keys' | 'words' | 'sentences'
 
-export default function FocusedPractice({ settings, onProgress, initialType, initialId }: { settings?: any; onProgress?: () => void; initialType?: FocusedType; initialId?: number }) {
+export default function FocusedPractice({ settings, onProgress, initialType, initialId }: { settings?: any; onProgress?: () => void; initialType?: FocusedType; initialId?: number | string }) {
   const [mode, setMode] = useState<'select' | 'practice' | 'result'>('select')
   const [type, setType] = useState<FocusedType>(initialType || 'keys')
   const [data, setData] = useState<any>(null)
@@ -31,7 +31,7 @@ export default function FocusedPractice({ settings, onProgress, initialType, ini
   const inputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
 
-  const loadData = async (t: FocusedType, focusId?: number) => {
+  const loadData = async (t: FocusedType, focusId?: number | string) => {
     setLoading(true)
     try {
       const r = await fetch(`/api/practice/focused?type=${t}${focusId ? `&focusId=${focusId}` : ''}`)

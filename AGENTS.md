@@ -47,6 +47,7 @@ bun run scripts/prewarm-listening-tts.ts
 | 07-28 | 性能优化：统计聚合与取词链路（热力图 90 天 / 报告 SQL 聚合 / 按需取详情 / 连击不截断） | `e74973f` |
 | 07-31 | **全自动全链路测试体系**：`npm run test:all` 一键（E2E 10 流程 + vitest 单元 + 90 天 FSRS 模拟），正式库零接触 | `b9bf193` |
 | 08-01 | 正式库清理 + setup-e2e 防呆加固（路径校验 / 清空硬校验） | `dbbf12a` |
+| 08-01 | 交付级深度审查：移除构建绕过（ignoreBuildErrors）、focused 错题门槛与错题本对齐、错题「立即攻克」word 置顶修复、专项 keys 加 90 天窗口、键盘通关服务端化（KEYBOARD_LEVELS 常量）、学段晋级同步 user.stage、newCards 死指标修复、store/zustand 死代码清理、Docker 部署完善（Caddy HTTPS/sqlite3 热备份/全路径 db:push） | 见 git log |
 
 ## 自动化测试体系（三层隔离）
 
@@ -80,13 +81,15 @@ git diff                 # 查看未暂存的改动
 
 ## 硬性约定
 
-1. **零新增生产依赖**（历史阶段约束延续）；devDependencies 允许测试工具（@playwright/test / vitest 已入 bun.lock），优先用现有库与 `src/lib` 工具
-2. **改完必跑 `bunx tsc --noEmit`**，零错误才算完成
-3. **TTS_SERVER_URL / TTS_TOKEN 仅 env 可配**，用户不可写；token 不下发前端（音频走 `/api/tts/audio` 代理）
-4. **`English_Playful_Child` 音色在 TTS 服务器上 500，禁用**（dialogue.ts 已移除，勿加回）
-5. API 契约变更需同步更新 README 结构说明
-6. 页面零硬编码教学数据，全部入库
-7. 错误响应用通用文案，不回显 `e.message`
+1. **零新增生产依赖**（历史阶段约束延续）；devDependencies 允许测试工具（@playwright/test / vitest 已入 bun.lock），优先用现有库与 `src/lib` 工具；死依赖死代码定期清理（zustand/store.ts 已于 08-01 移除）
+2. **改完必跑 `bunx tsc --noEmit`**，零错误才算完成；`next.config.ts` 已移除 `ignoreBuildErrors`，`next build` 同门拦截类型错误
+3. **键盘关卡通关阈值以服务端常量 `KEYBOARD_LEVELS` 为准**（session/route.ts），客户端传的 passWpm/passAccuracy/stars 不参与解锁判定；错题门槛统一 `lapses≥1 || totalErrors≥2`（mistakes 与 focused 两处一致，勿用 difficulty 门槛）
+4. **TTS_SERVER_URL / TTS_TOKEN 仅 env 可配**，用户不可写；token 不下发前端（音频走 `/api/tts/audio` 代理）
+5. **`English_Playful_Child` 音色在 TTS 服务器上 500，禁用**（dialogue.ts 已移除，勿加回）
+6. API 契约变更需同步更新 README 结构说明
+7. 页面零硬编码教学数据，全部入库
+8. 错误响应用通用文案，不回显 `e.message`
+9. 学段晋级必须同步 `user.stage`（word/sentence 晋级与 books 切换教材三处），否则仪表盘与阅读/听力默认学段失步
 
 ## 环境
 

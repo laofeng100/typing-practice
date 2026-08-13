@@ -10,7 +10,8 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { cn } from '@/lib/utils'
 
 interface MistakeItem {
-  id: number
+  // word 条目 id 为 head_word 字符串（如 "about"），sentence 条目 id 为数字；两者皆可作为 focusId 透传
+  id: number | string
   en?: string
   zh?: string
   pos?: string
@@ -28,7 +29,7 @@ interface MistakeItem {
   due: string
 }
 
-export default function MistakeBook({ onPractice }: { onPractice?: (type: string, id: number) => void }) {
+export default function MistakeBook({ onPractice }: { onPractice?: (type: string, id: number | string) => void }) {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
@@ -121,7 +122,7 @@ export default function MistakeBook({ onPractice }: { onPractice?: (type: string
   )
 }
 
-function MistakeList({ items, type, onPractice }: { items: MistakeItem[]; type: string; onPractice?: (type: string, id: number) => void }) {
+function MistakeList({ items, type, onPractice }: { items: MistakeItem[]; type: string; onPractice?: (type: string, id: number | string) => void }) {
   if (items.length === 0) {
     return (
       <Card>

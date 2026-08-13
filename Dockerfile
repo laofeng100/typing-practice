@@ -35,10 +35,11 @@ ENV HOSTNAME=0.0.0.0
 # 时区：datetime.ts 的本地日期计算依赖此项（docker-compose 未覆盖时的兜底默认）
 ENV TZ=Asia/Shanghai
 
-# 安装最小运行时依赖
+# 安装最小运行时依赖（sqlite3 CLI 用于容器内热备份/运维查询，见 DEPLOY.md）
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     tzdata \
+    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 # 创建数据目录

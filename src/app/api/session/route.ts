@@ -5,6 +5,7 @@ import { schedule, rateTyping, createNewCard, Rating, type FsrsCardState } from 
 import { getSettings } from '@/lib/settings'
 import { localDateStr } from '@/lib/datetime'
 import { computeAchievements } from '@/lib/achievements'
+import { KEYBOARD_LEVELS } from '@/lib/typing'
 
 /**
  * 提交练习结果（通用）
@@ -31,6 +32,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 })
 
   const body = await req.json()
+  // stars 仅记录到会话（历史展示用），通关星级由服务端在 upsertProgress 中按常量重新计算，客户端值不参与解锁判定
   const { module, subModule, records = [], level, score, stars } = body
 
   // payload 基础校验：非法模块/超量记录直接拒绝
@@ -166,9 +168,14 @@ export async function POST(req: NextRequest) {
   await updateDailyStat(user.id, today, module, durationMs, totalKeys, correctKeys, wpm, accuracy, records.length, newWordCount, reviewWordCount)
 
   // 更新关卡进度
-  if (module === 'keyboard' && level) {
-    const passed = wpm >= (body.passWpm || 20) && accuracy >= (body.passAccuracy || 90)
-    await upsertProgress(user.id, 'keyboard', level, wpm, accuracy, stars || (passed ? (wpm >= (body.passWpm || 20) * 1.5 ? 3 : wpm >= (body.passWpm || 20) * 1.2 ? 2 : 1) : 0), passed)
+  // 通关阈值取服务端常量 KEYBOARD_LEVELS（不再信任客户端 passWpm/passAccuracy，防篡改直达通关）
+  if (module === 'keyboard' && Number.isInteger(level) && (level as number) >= 1 && (level as number) <= KEYBOARD_LEVELS.length) {
+    const levelCfg = KEYBOARD_LEVELS[(level as number) - 1]
+    const passWpm = levelCfg.passWpm
+    const passAccuracy = levelCfg.passAccuracy
+    const passed = wpm >= passWpm && accuracy >= passAccuracy
+    const computedStars = passed ? (wpm >= passWpm * 1.5 ? 3 : wpm >= passWpm * 1.2 ? 2 : 1) : 0
+    await upsertProgress(user.id, 'keyboard', level as number, wpm, accuracy, computedStars, passed)
   }
 
   // 提交后对比，得出本次新解锁成就

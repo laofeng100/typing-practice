@@ -29,8 +29,9 @@ export async function getCurrentUser() {
   const userId = value.slice(0, dot)
   const sig = value.slice(dot + 1)
   const expected = sign(userId)
-  const a = Buffer.from(sig)
-  const b = Buffer.from(expected)
+  // hex 解码后比较（而不是直接比较 hex 字符串的 UTF-8 字节），长度相等时逐字节恒定时间比较
+  const a = Buffer.from(sig, 'hex')
+  const b = Buffer.from(expected, 'hex')
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null
   return db.user.findUnique({ where: { id: userId } })
 }
@@ -90,7 +91,7 @@ export async function verifyParentPinToken(userId: string): Promise<boolean> {
   const exp = Number(expStr)
   if (tokenUserId !== userId || !Number.isFinite(exp) || Date.now() > exp) return false
   const expected = signParentPin(userId, exp)
-  const a = Buffer.from(sig)
-  const b = Buffer.from(expected)
+  const a = Buffer.from(sig, 'hex')
+  const b = Buffer.from(expected, 'hex')
   return a.length === b.length && timingSafeEqual(a, b)
 }

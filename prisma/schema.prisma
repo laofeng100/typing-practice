@@ -138,7 +138,7 @@ model WordRelated {
   @@index([wordId])
 }
 
-// 语法句式 (215条)
+// 语法句式 (121条)
 model GrammarPattern {
   id         Int      @id
   stage      String   // 学段
@@ -230,7 +230,7 @@ model ListeningArticle {
 model FsrsCard {
   id           String   @id @default(cuid())
   userId       String
-  cardType     String   // 卡片类型：word/sentence/article
+  cardType     String   // 卡片类型：word/sentence（白名单 FSRS_CARD_TYPES；article/listening 不建卡）
   cardId       String   // 对应资源ID（字符串化）
   // FSRS V6 核心参数
   stability    Float    @default(0) // 记忆稳定性
@@ -392,7 +392,7 @@ model DailyStat {
   // 阅读
   articleDone  Int      @default(0)
   // 中文
-  chineseDone  Int      @default(0)
+  chineseDone  Int      @default(0) // 古诗词模块已下线，字段保留无写入路径（移除需重建表，勿动）
   // 听力
   listeningDone Int     @default(0)
   // 汇总

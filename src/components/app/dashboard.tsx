@@ -169,7 +169,7 @@ export default function Dashboard({ data, onNavigate }: { data: any; onNavigate:
           label="待复习"
           value={`${dueCards}`}
           unit="个"
-          sub={newCards > 0 ? `${newCards} 新词待学` : '暂无新词'}
+          sub={newCards > 0 ? `今日新学 ${newCards} 词` : '今日暂无新词'}
           color="amber"
         />
         <StatCard

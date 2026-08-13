@@ -29,3 +29,24 @@ services:
       timeout: 10s
       start_period: 15s
       retries: 3
+
+  # HTTPS 反向代理（可选）：`docker compose --profile https up -d` 启用
+  # 前提：域名已解析到本机，80/443 端口可用；证书由 Caddy 自动申请与续期
+  caddy:
+    image: caddy:2-alpine
+    container_name: typing-caddy
+    profiles: ["https"]
+    depends_on:
+      - typing-practice
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

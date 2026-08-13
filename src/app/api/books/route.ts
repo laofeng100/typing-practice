@@ -4,6 +4,8 @@ import { db } from '@/lib/db'
 
 // 学段顺序（与 Book.stage 对应）
 const STAGE_ORDER = ['primary', 'middle', 'high']
+// Book.stage（英文）→ User.stage（中文）映射：手动切换教材时同步用户学段
+const STAGE_MAP: Record<string, string> = { primary: '小学', middle: '初中', high: '高中' }
 
 // 教材排序 key：学段 → 年级（0=通用词表排最后）→ 学期 → 版本
 export function bookSortKey(b: { stage: string; grade: number | null; term: number | null; version: string | null }) {
@@ -67,6 +69,7 @@ export async function PATCH(req: NextRequest) {
   const book = await db.book.findUnique({ where: { id: bookId } })
   if (!book) return NextResponse.json({ error: '词书不存在' }, { status: 404 })
 
-  await db.user.update({ where: { id: user.id }, data: { bookId } })
+  // 切换教材时同步用户学段（仪表盘展示与阅读/听力默认学段依赖 user.stage）
+  await db.user.update({ where: { id: user.id }, data: { bookId, stage: STAGE_MAP[book.stage] || user.stage } })
   return NextResponse.json({ ok: true, bookId })
 }

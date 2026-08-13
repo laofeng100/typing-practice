@@ -42,9 +42,8 @@ export async function GET() {
   const dueCards = await db.fsrsCard.count({
     where: { userId: user.id, cardType: { in: FSRS_TYPES }, due: { lte: new Date() }, state: { gt: 0 } },
   })
-  const newCards = await db.fsrsCard.count({
-    where: { userId: user.id, cardType: { in: FSRS_TYPES }, state: 0 },
-  })
+  // 今日新学数：直接读 DailyStat.wordNew（原先按 state=0 统计恒为 0——卡创建即进 Review，无 state=0 卡）
+  const newCards = todayStat.wordNew
 
   // 单词进度（按学段）
   const wordProgress = await db.fsrsCard.groupBy({
